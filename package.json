@@ -1,0 +1,49 @@
+{
+  "name": "anima-os",
+  "version": "1.1.0",
+  "description": "Self-deploying, self-evolving agentic operating system governed by mathematical constants",
+  "author": "Riyad Ketami <riyad@ketami.net>",
+  "license": "MIT",
+  "main": "runtime/cli.js",
+  "bin": {
+    "anima": "runtime/cli.js"
+  },
+  "scripts": {
+    "setup": "cd setup && bash install.sh",
+    "verify": "node setup/verify.js",
+    "daemon": "node setup/pi_pulse_daemon.js start",
+    "daemon:stop": "node setup/pi_pulse_daemon.js stop",
+    "daemon:status": "node setup/pi_pulse_daemon.js status",
+    "cli": "node runtime/cli.js",
+    "status": "node runtime/cli.js status",
+    "health": "node runtime/cli.js health",
+    "agents": "node runtime/cli.js agents",
+    "constants": "node runtime/cli.js constants",
+    "test": "node runtime/tests/phi_core.test.js && node runtime/tests/quantum_engine.test.js && node runtime/tests/immune_scanner.test.js && node runtime/tests/swarm.test.js",
+    "test:phi": "node runtime/tests/phi_core.test.js",
+    "test:quantum": "node runtime/tests/quantum_engine.test.js",
+    "test:immune": "node runtime/tests/immune_scanner.test.js",
+    "test:swarm": "node runtime/tests/swarm.test.js",
+    "dashboard": "cd dashboard && npm run dev",
+    "dashboard:build": "cd dashboard && npm run build",
+    "dashboard:deploy": "cd dashboard && npx vercel --prod"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "agentic",
+    "ai",
+    "autonomous",
+    "fractal",
+    "golden-ratio",
+    "multi-agent",
+    "operating-system",
+    "openclaw",
+    "self-evolving"
+  ]
+}

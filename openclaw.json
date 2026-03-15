@@ -1,0 +1,226 @@
+{
+  "name": "ANIMA OS",
+  "version": "1.1.0",
+  "engine": "SOLARIS",
+  "description": "Self-deploying, self-evolving agentic operating system governed by mathematical constants",
+  "author": "Riyad Ketami <riyad@ketami.net>",
+  "license": "MIT",
+  "entry_point": "SOLARIS.md",
+
+  "agents": [
+    {
+      "name": "ROOT_ORCHESTRATOR",
+      "file": "agents/ROOT_ORCHESTRATOR.md",
+      "depth": 0,
+      "phi_weight": 1.0,
+      "parent": null,
+      "cycle": "every_pulse",
+      "tools": ["phi_core", "pi_pulse", "fractal_spawn", "supabase_memory", "discord_nerve", "telegram_pulse", "quantum_layer"],
+      "description": "Central nervous system — routes all tasks, maintains heartbeat"
+    },
+    {
+      "name": "PRIMARY_CELL",
+      "file": "agents/PRIMARY_CELL.md",
+      "depth": 1,
+      "phi_weight": 0.618,
+      "parent": "ROOT_ORCHESTRATOR",
+      "cycle": "every_pulse",
+      "tools": ["phi_core", "supabase_memory", "discord_nerve", "quantum_layer"],
+      "description": "Core execution agent — builds, creates, executes mission tasks"
+    },
+    {
+      "name": "SUPPORT_CELL",
+      "file": "agents/SUPPORT_CELL.md",
+      "depth": 1,
+      "phi_weight": 0.382,
+      "parent": "ROOT_ORCHESTRATOR",
+      "cycle": "every_pulse",
+      "tools": ["phi_core", "supabase_memory", "discord_nerve"],
+      "description": "Monitoring and coordination — manages memory, evolution, immune"
+    },
+    {
+      "name": "MEMORY_NODE",
+      "file": "agents/MEMORY_NODE.md",
+      "depth": 2,
+      "phi_weight": 0.146,
+      "parent": "SUPPORT_CELL",
+      "cycle": "every_compaction",
+      "tools": ["supabase_memory"],
+      "description": "Persistent memory — all Supabase read/write flows through here"
+    },
+    {
+      "name": "EVOLUTION_NODE",
+      "file": "agents/EVOLUTION_NODE.md",
+      "depth": 2,
+      "phi_weight": 0.236,
+      "parent": "SUPPORT_CELL",
+      "cycle": "every_pi_squared",
+      "tools": ["supabase_memory", "discord_nerve", "quantum_layer"],
+      "description": "Behavioral evolution — QRL learning, alignment analysis"
+    },
+    {
+      "name": "IMMUNE_AGENT",
+      "file": "agents/IMMUNE_AGENT.md",
+      "depth": 2,
+      "phi_weight": 0.146,
+      "parent": "SUPPORT_CELL",
+      "cycle": "every_pulse",
+      "tools": ["supabase_memory", "discord_nerve", "telegram_pulse"],
+      "description": "Security scanner — prompt injection, alignment drift, quarantine"
+    }
+  ],
+
+  "skills": [
+    {
+      "name": "phi_core",
+      "file": "skills/phi_core/SKILL.md",
+      "description": "Phi-weighted routing engine for task scoring and assignment"
+    },
+    {
+      "name": "pi_pulse",
+      "file": "skills/pi_pulse/SKILL.md",
+      "description": "Pi-cycle heartbeat manager"
+    },
+    {
+      "name": "fractal_spawn",
+      "file": "skills/fractal_spawn/SKILL.md",
+      "description": "Fractal agent spawning following Fibonacci limits"
+    },
+    {
+      "name": "supabase_memory",
+      "file": "skills/supabase_memory/SKILL.md",
+      "description": "Supabase CRUD with phi-based backoff"
+    },
+    {
+      "name": "discord_nerve",
+      "file": "skills/discord_nerve/SKILL.md",
+      "description": "Discord channel communication and alerts"
+    },
+    {
+      "name": "telegram_pulse",
+      "file": "skills/telegram_pulse/SKILL.md",
+      "description": "Telegram daily reports and critical alerts"
+    },
+    {
+      "name": "quantum_layer",
+      "file": "skills/quantum_layer/SKILL.md",
+      "description": "Quantum decision layer — superposition, entanglement, interference, QRL"
+    }
+  ],
+
+  "documents": [
+    {
+      "name": "CONSTITUTION",
+      "file": "CONSTITUTION.md",
+      "type": "immutable",
+      "description": "The 5 immutable laws governing the organism"
+    },
+    {
+      "name": "QUANTUM_CONSTITUTION",
+      "file": "QUANTUM_CONSTITUTION.md",
+      "type": "immutable",
+      "description": "Laws 6-12 — quantum extensions"
+    },
+    {
+      "name": "SOUL_TEMPLATE",
+      "file": "SOUL_TEMPLATE.md",
+      "type": "template",
+      "description": "Mission DNA — populated during onboarding"
+    },
+    {
+      "name": "GENESIS",
+      "file": "GENESIS.md",
+      "type": "live",
+      "description": "Live heartbeat state board — rewritten every pulse"
+    },
+    {
+      "name": "GATEWAY",
+      "file": "GATEWAY.md",
+      "type": "protocol",
+      "description": "Component registration and validation protocol"
+    },
+    {
+      "name": "IMMUNE",
+      "file": "IMMUNE.md",
+      "type": "protocol",
+      "description": "Security scan protocols and quarantine procedures"
+    },
+    {
+      "name": "SWARM",
+      "file": "SWARM.md",
+      "type": "protocol",
+      "description": "Swarm intelligence and collective decision-making"
+    }
+  ],
+
+  "integrations": {
+    "required": [
+      {
+        "name": "supabase",
+        "type": "database",
+        "tables": ["anima_agent_logs", "anima_fractal_state", "anima_evolution_log", "anima_cost_tracker", "anima_master_profile"],
+        "env_vars": ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_KEY"],
+        "setup": "setup/supabase_schema.sql"
+      },
+      {
+        "name": "discord",
+        "type": "messaging",
+        "channels": 10,
+        "env_vars": ["DISCORD_BOT_TOKEN", "DISCORD_GUILD_ID"],
+        "setup": "setup/discord_setup.js"
+      },
+      {
+        "name": "openrouter",
+        "type": "llm",
+        "env_vars": ["OPENROUTER_API_KEY"]
+      }
+    ],
+    "optional": [
+      {
+        "name": "telegram",
+        "type": "messaging",
+        "env_vars": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"],
+        "status": "stub"
+      },
+      { "name": "n8n", "type": "webhook", "status": "stub" },
+      { "name": "helicone", "type": "proxy", "status": "stub" },
+      { "name": "langfuse", "type": "tracing", "status": "stub" },
+      { "name": "ollama", "type": "llm_fallback", "status": "stub" },
+      { "name": "lark", "type": "messaging", "status": "stub" },
+      { "name": "whatsapp_kapso", "type": "messaging", "status": "stub" },
+      { "name": "stripe", "type": "payments", "status": "stub" }
+    ]
+  },
+
+  "dashboard": {
+    "framework": "next.js",
+    "directory": "dashboard",
+    "deployment": "vercel",
+    "env_vars": ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"]
+  },
+
+  "setup": {
+    "installer": "setup/install.sh",
+    "verifier": "setup/verify.js",
+    "daemon": "setup/pi_pulse_daemon.js"
+  },
+
+  "onboarding": {
+    "modes": ["SPARK", "ORACLE", "WILD"],
+    "files": {
+      "spark": "onboarding/SPARK_MODE.md",
+      "oracle": "onboarding/ORACLE_MODE.md",
+      "wild": "onboarding/WILD_MODE.md",
+      "oracle_prompt": "onboarding/oracle_prompt.txt"
+    }
+  },
+
+  "constants": {
+    "phi": 1.6180339887,
+    "pi": 3.1415926535,
+    "euler": 2.7182818284,
+    "harmonic_bridge": 1.2002,
+    "fractal_max_depth": 5,
+    "fibonacci_sequence": [1, 1, 2, 3, 5, 8, 13]
+  }
+}

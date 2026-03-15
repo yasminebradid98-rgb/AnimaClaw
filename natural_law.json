@@ -1,0 +1,228 @@
+{
+  "system": "ANIMA OS",
+  "version": "1.0.0",
+  "engine": "SOLARIS",
+  "author": "Riyad Ketami",
+  "contact": "riyad@ketami.net",
+
+  "constants": {
+    "phi": {
+      "value": 1.6180339887,
+      "name": "Golden Ratio",
+      "domain": "Structure, hierarchy, resource allocation",
+      "primary_weight": 0.618,
+      "secondary_weight": 0.382
+    },
+    "pi": {
+      "value": 3.1415926535,
+      "name": "Pi",
+      "domain": "Rhythm, cycles, timing",
+      "micro_pulse_seconds": 3.1415926535,
+      "memory_compaction_minutes": 5.0832,
+      "evolution_check_cycles": 9.8696,
+      "full_reset_cycles": 11.0902
+    },
+    "euler": {
+      "value": 2.7182818284,
+      "name": "Euler's Number",
+      "domain": "Growth, decay, compounding",
+      "success_formula": "e^(alignment * cycle)",
+      "failure_formula": "e^(-drift * cycle)",
+      "memory_compounding_formula": "e^(phi * depth)"
+    },
+    "fractal": {
+      "domain": "Self-similarity, spawning, depth",
+      "max_depth": 5,
+      "spawn_sequence": [1, 1, 2, 3, 5, 8],
+      "dna_inheritance": "full_mirror"
+    },
+    "harmonic_bridge": {
+      "value": 0.3063,
+      "formula": "pi / phi^2",
+      "purpose": "Converts structure ratios to cycle timing"
+    }
+  },
+
+  "vitality": {
+    "formula": "(phi^depth * e^alignment) / (pi^cycle_age) * fractal_score",
+    "thresholds": {
+      "expand": 1.0,
+      "maintain_upper": 1.0,
+      "maintain_lower": 0.618,
+      "critical": 0.618
+    },
+    "actions": {
+      "above_1": "EXPAND — spawn new agents, increase resources",
+      "0618_to_1": "MAINTAIN — steady state, optimize existing",
+      "below_0618": "MORPHALLAXIS — regenerate, prune, heal"
+    }
+  },
+
+  "allocation_rules": {
+    "resource_split": {
+      "primary": 0.618,
+      "secondary": 0.382,
+      "applies_to": ["tokens", "memory", "time", "agent_slots", "tool_calls"]
+    },
+    "token_budget": {
+      "primary_cell_ratio": 0.618,
+      "support_cell_ratio": 0.382,
+      "within_support": {
+        "memory_node": 0.382,
+        "evolution_node": 0.618
+      }
+    }
+  },
+
+  "cycle_timing": {
+    "heartbeat_seconds": 3.1415926535,
+    "memory_compaction_minutes": 5.0832,
+    "evolution_check_interval_cycles": 10,
+    "full_reset_interval_cycles": 11,
+    "daily_report_hour_utc": 6,
+    "alignment_scan_interval_cycles": 5
+  },
+
+  "fractal_rules": {
+    "max_depth": 5,
+    "fibonacci_sequence": [1, 1, 2, 3, 5, 8],
+    "spawn_trigger": "load > phi * current_capacity",
+    "prune_trigger": "vitality < 0.382 for 3 consecutive cycles",
+    "inheritance": {
+      "constitution": "immutable_copy",
+      "mission_dna": "full_copy",
+      "phi_weight": "calculated_from_depth",
+      "tools": "subset_of_parent"
+    }
+  },
+
+  "agent_registry": {
+    "root_orchestrator": {
+      "depth": 0,
+      "phi_weight": 1.0,
+      "parent": null,
+      "cycle": "every_pulse"
+    },
+    "primary_cell": {
+      "depth": 1,
+      "phi_weight": 0.618,
+      "parent": "root_orchestrator",
+      "cycle": "every_pulse"
+    },
+    "support_cell": {
+      "depth": 1,
+      "phi_weight": 0.382,
+      "parent": "root_orchestrator",
+      "cycle": "every_pulse"
+    },
+    "memory_node": {
+      "depth": 2,
+      "phi_weight": 0.382,
+      "parent": "support_cell",
+      "cycle": "every_compaction"
+    },
+    "evolution_node": {
+      "depth": 2,
+      "phi_weight": 0.618,
+      "parent": "support_cell",
+      "cycle": "every_pi_squared"
+    },
+    "immune_agent": {
+      "depth": 2,
+      "phi_weight": 0.382,
+      "parent": "support_cell",
+      "cycle": "every_pulse"
+    }
+  },
+
+  "integrations": {
+    "supabase": {
+      "tables": [
+        "anima_agent_logs",
+        "anima_fractal_state",
+        "anima_evolution_log",
+        "anima_cost_tracker",
+        "anima_master_profile"
+      ],
+      "realtime_enabled": true
+    },
+    "discord": {
+      "channels": [
+        "anima-mission-control",
+        "root-orchestrator",
+        "primary-cell",
+        "support-cell",
+        "memory-node",
+        "evolution-node",
+        "immune-system",
+        "genesis-heartbeat",
+        "cost-tracker",
+        "master-profile"
+      ]
+    },
+    "telegram": {
+      "daily_report": true,
+      "report_hour_utc": 6
+    },
+    "n8n": {
+      "webhook_endpoint": "/api/webhooks/n8n",
+      "status": "stub"
+    },
+    "helicone": {
+      "proxy_url": "https://oai.hconeai.com/v1",
+      "status": "stub"
+    },
+    "langfuse": {
+      "tracing": true,
+      "status": "stub"
+    },
+    "ollama": {
+      "fallback_model": "llama3:8b",
+      "base_url": "http://localhost:11434",
+      "status": "stub"
+    },
+    "lark": {
+      "webhook_url": "",
+      "status": "stub"
+    },
+    "whatsapp_kapso": {
+      "webhook_url": "",
+      "status": "stub"
+    },
+    "stripe": {
+      "webhook_endpoint": "/api/webhooks/stripe",
+      "status": "stub"
+    }
+  },
+
+  "onboarding": {
+    "modes": ["SPARK", "ORACLE", "WILD"],
+    "spark_questions": 5,
+    "oracle_questions": 12,
+    "wild_mode": "free_exploration"
+  },
+
+  "registered_components": [],
+
+  "status_states": ["ALIVE", "HEALING", "EVOLVING", "DORMANT", "SPAWNING", "PRUNED"],
+
+  "design_system": {
+    "colors": {
+      "background": "#0a0a0f",
+      "primary_gold": "#c9a84c",
+      "secondary_blue": "#4c7bc9",
+      "success_green": "#4cc97b",
+      "warning_red": "#c94c4c",
+      "text_primary": "#e8e6e3",
+      "text_secondary": "#8a8780"
+    },
+    "fonts": {
+      "ui": "Inter",
+      "data": "JetBrains Mono"
+    },
+    "layout": {
+      "sidebar_width": "38.2%",
+      "main_width": "61.8%"
+    }
+  }
+}

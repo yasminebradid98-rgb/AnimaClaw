@@ -1,0 +1,27 @@
+{
+  "master_name": "",
+  "brand": "",
+  "mission_dna": "",
+  "primary_platform": "",
+  "tools_stack": [],
+  "goal_90_days": "",
+  "main_obstacles": [],
+  "communication_style": "",
+  "business_model": "",
+  "content_topics": [],
+  "first_automation": "",
+  "system_prohibitions": [],
+  "team_structure": "",
+  "timezone": "",
+  "language_preference": "",
+  "phi_profile": {
+    "primary_focus_weight": 0.618,
+    "support_focus_weight": 0.382,
+    "evolution_frequency": "daily",
+    "personal_best_score": 0,
+    "global_best_score": 0
+  },
+  "installed_at": "",
+  "last_evolution": "",
+  "total_cycles": 0
+}

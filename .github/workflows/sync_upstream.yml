@@ -1,0 +1,167 @@
+name: ANIMA OS — Sync Upstream
+
+# ═══════════════════════════════════════════════════════════
+# Checks for new OpenClaw releases every 6 hours.
+# On new release: runs anima_converter.js in CI mode,
+# commits the transformed files with a detailed message.
+#
+# Engine: SOLARIS v1.3.0
+# Author: Riyad Ketami — riyad@ketami.net
+# ═══════════════════════════════════════════════════════════
+
+on:
+  schedule:
+    # Every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
+    - cron: '0 */6 * * *'
+
+  # Manual trigger with version input
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Upstream version to sync (e.g., v0.5.0). Leave empty to auto-detect latest.'
+        required: false
+        default: ''
+      force:
+        description: 'Force re-conversion even if already at this version'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '18'
+  CONVERTER_PATH: 'converter/anima_converter.js'
+  VERSION_FILE: '.openclaw_version'
+
+jobs:
+  sync:
+    name: Sync Upstream Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Step 1: Checkout ──
+      - name: Checkout AnimaClaw
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Step 2: Setup Node.js ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # ── Step 3: Install dependencies ──
+      - name: Install dependencies
+        run: npm ci --ignore-scripts 2>/dev/null || npm install
+
+      # ── Step 4: Detect latest version ──
+      - name: Detect latest upstream version
+        id: detect
+        run: |
+          # Use manual input or auto-detect
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            LATEST="${{ github.event.inputs.version }}"
+            echo "Source: manual input"
+          else
+            LATEST=$(curl -s -H "User-Agent: ANIMA-OS-CI" \
+              "https://api.github.com/repos/openclaw/openclaw/releases/latest" \
+              | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
+              | head -1 \
+              | sed 's/.*"\([^"]*\)"$/\1/')
+            echo "Source: GitHub API auto-detect"
+          fi
+
+          # Read current version
+          CURRENT="none"
+          if [ -f "${{ env.VERSION_FILE }}" ]; then
+            CURRENT=$(cat "${{ env.VERSION_FILE }}" | tr -d '[:space:]')
+          fi
+
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+
+          # Determine if update needed
+          FORCE="${{ github.event.inputs.force }}"
+          if [ "$CURRENT" = "$LATEST" ] && [ "$FORCE" != "true" ]; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "Already at $LATEST — no update needed"
+          else
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "Update available: $CURRENT → $LATEST"
+          fi
+
+      # ── Step 5: Run converter ──
+      - name: Run ANIMA Converter
+        if: steps.detect.outputs.needs_update == 'true'
+        id: convert
+        run: |
+          echo "Converting: ${{ steps.detect.outputs.latest }}"
+          node ${{ env.CONVERTER_PATH }} \
+            --version=${{ steps.detect.outputs.latest }} \
+            --mode=ci
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      # ── Step 6: Commit changes ──
+      - name: Commit converted files
+        if: steps.detect.outputs.needs_update == 'true'
+        run: |
+          git config user.name "ANIMA OS Bot"
+          git config user.email "anima-bot@ketami.net"
+
+          # Stage all changes
+          git add -A
+
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "No file changes to commit"
+            exit 0
+          fi
+
+          # Create detailed commit message
+          CURRENT="${{ steps.detect.outputs.current }}"
+          LATEST="${{ steps.detect.outputs.latest }}"
+
+          git commit -m "$(cat <<EOF
+          sync: upstream ${LATEST} (from ${CURRENT})
+
+          ANIMA OS Living Update Converter — automated sync
+
+          Upstream: ${CURRENT} → ${LATEST}
+          Engine: SOLARIS v1.3.0
+          Pipeline: download → extract → diff → split → transform → merge → copy
+
+          Transformations applied:
+          - Brand replacement (OpenClaw → ANIMA OS)
+          - φ-weight injection (resource allocation → 61.8/38.2)
+          - π-timing alignment (intervals → π-derived values)
+          - Memory route injection (local → Supabase)
+
+          Protected files preserved per PROTECTED_FILES.json.
+          Config deep-merged with ANIMA winning on all conflicts.
+
+          Co-Authored-By: ANIMA OS Bot <anima-bot@ketami.net>
+          EOF
+          )"
+
+          git push
+
+      # ── Step 7: Summary ──
+      - name: Summary
+        if: always()
+        run: |
+          echo "## ANIMA OS Sync Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Current Version | \`${{ steps.detect.outputs.current }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Latest Version | \`${{ steps.detect.outputs.latest }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Update Needed | ${{ steps.detect.outputs.needs_update }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Engine | SOLARIS v1.3.0 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "*φ=1.618 | π=3.14159 | e=2.71828 | ψ=Superposition*" >> "$GITHUB_STEP_SUMMARY"

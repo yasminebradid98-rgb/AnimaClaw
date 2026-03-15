@@ -1,0 +1,167 @@
+{
+  "_comment": "ANIMA OS — n8n Webhook Workflow v1.5.0. Import this into n8n to receive Supabase webhook events from anima_agent_logs.",
+  "name": "ANIMA OS — Agent Log Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "anima-agent-log",
+        "responseMode": "onReceived",
+        "responseData": "allEntries"
+      },
+      "name": "Webhook: Supabase agent_logs INSERT",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "anima-agent-log"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.record.agent_name }}",
+              "operation": "contains",
+              "value2": "PRIMARY_CELL"
+            }
+          ]
+        }
+      },
+      "name": "Route: PRIMARY_CELL (Content)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 150]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.record.agent_name }}",
+              "operation": "contains",
+              "value2": "IMMUNE_AGENT"
+            }
+          ]
+        }
+      },
+      "name": "Route: IMMUNE_AGENT (Alert)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 350]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.record.cost_usd }}",
+              "operation": "largerEqual",
+              "value2": 1.0
+            }
+          ]
+        }
+      },
+      "name": "Route: Cost Threshold ($1+)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 550]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.record.agent_name }}",
+              "operation": "contains",
+              "value2": "EVOLUTION_NODE"
+            }
+          ]
+        }
+      },
+      "name": "Route: EVOLUTION_NODE (Evolution)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 750]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Content Post Trigger\n// Triggered when PRIMARY_CELL logs a content-related task\nconst record = $input.first().json.record;\nconst payload = {\n  event: 'content_post_trigger',\n  agent: record.agent_name,\n  task: record.task_description,\n  alignment: record.mission_alignment,\n  vitality: record.vitality_score,\n  cycle: record.cycle_number,\n  timestamp: record.pi_pulse_timestamp,\n  phi_weight: record.phi_weight,\n  model: record.model_used,\n  tokens: record.tokens_used\n};\nreturn [{ json: payload }];"
+      },
+      "name": "Format: Content Post Payload",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [750, 150]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Alert Routing\n// Triggered when IMMUNE_AGENT detects a threat\nconst record = $input.first().json.record;\nconst severity = record.mission_alignment < 0.382 ? 'CRITICAL' : record.mission_alignment < 0.618 ? 'WARNING' : 'INFO';\nconst payload = {\n  event: 'security_alert',\n  severity: severity,\n  agent: record.agent_name,\n  task: record.task_description,\n  alignment: record.mission_alignment,\n  cycle: record.cycle_number,\n  timestamp: record.pi_pulse_timestamp\n};\nreturn [{ json: payload }];"
+      },
+      "name": "Format: Alert Payload",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [750, 350]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Cost Threshold Alert\n// Triggered when a single task exceeds $1.00 USD\nconst record = $input.first().json.record;\nconst payload = {\n  event: 'cost_threshold_alert',\n  agent: record.agent_name,\n  model: record.model_used,\n  cost_usd: record.cost_usd,\n  tokens: record.tokens_used,\n  phi_weight: record.phi_weight,\n  cycle: record.cycle_number,\n  timestamp: record.pi_pulse_timestamp\n};\nreturn [{ json: payload }];"
+      },
+      "name": "Format: Cost Alert Payload",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [750, 550]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Evolution Event Notification\n// Triggered when EVOLUTION_NODE logs a cycle\nconst record = $input.first().json.record;\nconst payload = {\n  event: 'evolution_notification',\n  agent: record.agent_name,\n  task: record.task_description,\n  alignment: record.mission_alignment,\n  vitality: record.vitality_score,\n  cycle: record.cycle_number,\n  timestamp: record.pi_pulse_timestamp\n};\nreturn [{ json: payload }];"
+      },
+      "name": "Format: Evolution Payload",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [750, 750]
+    }
+  ],
+  "connections": {
+    "Webhook: Supabase agent_logs INSERT": {
+      "main": [
+        [
+          { "node": "Route: PRIMARY_CELL (Content)", "type": "main", "index": 0 },
+          { "node": "Route: IMMUNE_AGENT (Alert)", "type": "main", "index": 0 },
+          { "node": "Route: Cost Threshold ($1+)", "type": "main", "index": 0 },
+          { "node": "Route: EVOLUTION_NODE (Evolution)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Route: PRIMARY_CELL (Content)": {
+      "main": [
+        [{ "node": "Format: Content Post Payload", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Route: IMMUNE_AGENT (Alert)": {
+      "main": [
+        [{ "node": "Format: Alert Payload", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Route: Cost Threshold ($1+)": {
+      "main": [
+        [{ "node": "Format: Cost Alert Payload", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Route: EVOLUTION_NODE (Evolution)": {
+      "main": [
+        [{ "node": "Format: Evolution Payload", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "engine": "SOLARIS v1.5.0",
+    "author": "Riyad Ketami",
+    "description": "Routes ANIMA OS agent logs to appropriate n8n flows based on agent_name and cost thresholds."
+  }
+}

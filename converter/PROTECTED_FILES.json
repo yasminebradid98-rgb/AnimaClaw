@@ -1,0 +1,73 @@
+{
+  "_comment": "Files that brand_patch.js and converter tools NEVER modify. These contain ANIMA OS core identity, immutable laws, and sensitive configuration that must remain untouched during brand override operations.",
+
+  "protected_files": [
+    "SOUL.md",
+    "SOUL_TEMPLATE.md",
+    "CONSTITUTION.md",
+    "QUANTUM_CONSTITUTION.md",
+    "GENESIS.md",
+    "IMMUNE.md",
+    "SWARM.md",
+    "GATEWAY.md",
+    "SOLARIS.md",
+    "MASTER_TEMPLATE.json",
+    "natural_law.json",
+    "core/anima_config.json",
+    "core/SOUL.md",
+    "openclaw.json",
+    "converter/brand_patch.js",
+    "converter/merge_config.js",
+    "converter/PROTECTED_FILES.json",
+    "ANIMA_FLASH.sh",
+    ".openclaw_version",
+    "converter/anima_converter.js",
+    "converter/watch_upstream.sh"
+  ],
+
+  "protected_directories": [
+    "skills/quantum_layer/",
+    "skills/phi_core/",
+    "skills/pi_pulse/",
+    "skills/fractal_spawn/",
+    "skills/supabase_memory/",
+    "skills/discord_nerve/",
+    "skills/telegram_pulse/",
+    "agents/",
+    "onboarding/",
+    "core/",
+    ".github/"
+  ],
+
+  "protected_patterns": [
+    "*.test.js",
+    ".env",
+    ".env.example",
+    "*.sql",
+    "*.lock",
+    "node_modules/**"
+  ],
+
+  "reason": {
+    "SOUL.md": "Core identity — defines who ANIMA OS is",
+    "SOUL_TEMPLATE.md": "Mission DNA template — populated per user",
+    "CONSTITUTION.md": "Immutable Laws 1-5 — cannot be altered",
+    "QUANTUM_CONSTITUTION.md": "Immutable Laws 6-12 — quantum extensions",
+    "GENESIS.md": "Live heartbeat state — written only by ROOT_ORCHESTRATOR",
+    "IMMUNE.md": "Security protocols — tampering triggers immune response",
+    "SWARM.md": "Swarm intelligence protocols — collective decision-making",
+    "GATEWAY.md": "Component registration protocol — validation rules",
+    "SOLARIS.md": "The seed file — boot sequence entry point",
+    "MASTER_TEMPLATE.json": "User profile template — populated during onboarding",
+    "natural_law.json": "Mathematical constants registry — derived from physics",
+    "core/anima_config.json": "Master ANIMA config — source of truth for branding",
+    "agents/": "Agent definitions carry CONSTITUTION DNA — never brand-patched",
+    "skills/quantum_layer/": "Quantum decision layer — Law 6-12 implementation",
+    "onboarding/": "User-facing onboarding — already branded correctly",
+    "converter/": "Converter tools must not modify themselves",
+    ".openclaw_version": "Version tracking — written only by converter",
+    "converter/anima_converter.js": "Core conversion engine — self-modifying would break updates",
+    "converter/watch_upstream.sh": "Watcher daemon — must remain stable across updates",
+    ".github/": "CI/CD workflows — must not be brand-patched"
+  }
+}

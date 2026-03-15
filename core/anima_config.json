@@ -1,0 +1,186 @@
+{
+  "identity": {
+    "product_name": "ANIMA OS",
+    "version": "1.5.0",
+    "engine": "SOLARIS",
+    "repository": "AnimaClaw",
+    "author": "Riyad Ketami",
+    "contact": "riyad@ketami.net",
+    "license": "MIT",
+    "tagline": "The Living Agentic Operating System",
+    "deploy_file": "SOLARIS.md",
+    "description": "Self-deploying, self-evolving agentic operating system governed by mathematical constants"
+  },
+
+  "natural_law": {
+    "phi": {
+      "value": 1.6180339887,
+      "name": "Golden Ratio",
+      "symbol": "φ",
+      "domain": "Structure, hierarchy, resource allocation",
+      "primary_weight": 0.618,
+      "secondary_weight": 0.382,
+      "phi_squared": 2.6180339887,
+      "phi_cubed": 4.2360679775,
+      "phi_fifth": 11.0901699437
+    },
+    "pi": {
+      "value": 3.1415926535,
+      "name": "Pi",
+      "symbol": "π",
+      "domain": "Rhythm, cycles, timing",
+      "micro_pulse_seconds": 3.1415926535,
+      "memory_compaction_minutes": 5.0832,
+      "evolution_check_cycles": 9.8696,
+      "full_reset_cycles": 11.0902,
+      "pi_squared": 9.8696
+    },
+    "euler": {
+      "value": 2.7182818284,
+      "name": "Euler's Number",
+      "symbol": "e",
+      "domain": "Growth, decay, compounding",
+      "success_formula": "e^(alignment * cycle)",
+      "failure_formula": "e^(-drift * cycle)",
+      "memory_compounding_formula": "e^(phi * depth)",
+      "max_amplification": 3264,
+      "min_decay_floor": 0.000306
+    },
+    "fractal": {
+      "domain": "Self-similarity, spawning, depth",
+      "max_depth": 5,
+      "spawn_sequence": [1, 1, 2, 3, 5, 8],
+      "fibonacci_extended": [1, 1, 2, 3, 5, 8, 13],
+      "dna_inheritance": "full_mirror",
+      "max_total_agents": 20
+    },
+    "harmonic_bridge": {
+      "value": 1.2002,
+      "formula": "pi / phi^2",
+      "purpose": "Converts structural ratios to cycle timing"
+    }
+  },
+
+  "quantum_constants": {
+    "psi": {
+      "symbol": "ψ",
+      "name": "Superposition Wave Function",
+      "domain": "Decision evaluation, strategy scoring"
+    },
+    "laws": {
+      "law_6": { "name": "Superposition", "symbol": "ψ", "description": "Evaluate N strategies before acting" },
+      "law_7": { "name": "Entanglement", "description": "Shared state via Supabase realtime" },
+      "law_8": { "name": "Interference", "description": "Score amplification (>0.618) and cancellation (<0.618)" },
+      "law_9": { "name": "Tunneling", "description": "Escape local optima after pi^2 stagnation cycles" },
+      "law_10": { "name": "Decoherence", "description": "Quantum → Collapse → Classical → Quantum cycle" },
+      "law_11": { "name": "QAOA Routing", "description": "Optimal agent-task assignment in one turn" },
+      "law_12": { "name": "QRL Learning", "description": "Quantum Reinforcement Learning every pi^2 cycles" }
+    },
+    "entangled_pairs": [
+      { "a": "PRIMARY_CELL", "b": "EVOLUTION_NODE", "dimension": "Execution ↔ Adaptation" },
+      { "a": "MEMORY_NODE", "b": "IMMUNE_AGENT", "dimension": "Storage ↔ Security" },
+      { "a": "ROOT_ORCHESTRATOR", "b": "SUPPORT_CELL", "dimension": "Routing ↔ Monitoring" }
+    ],
+    "decoherence_timeout_ms": 5083,
+    "tunneling_band": [0.618, 0.680],
+    "tunneling_required_cycles": 10,
+    "qrl_shift_rate": 0.382,
+    "interference_threshold": 0.618,
+    "golden_ceiling": 1.618
+  },
+
+  "memory": {
+    "backend": "supabase_only",
+    "local_storage": false,
+    "local_fallback": false,
+    "tables": [
+      "anima_agent_logs",
+      "anima_fractal_state",
+      "anima_evolution_log",
+      "anima_cost_tracker",
+      "anima_master_profile"
+    ],
+    "compaction_interval_minutes": 5.0832,
+    "archive_threshold_cycles": 11.09,
+    "batch_backoff_base_ms": 1618,
+    "batch_backoff_multiplier": 1.618,
+    "max_retries": 5,
+    "realtime_enabled": true,
+    "realtime_tables": ["anima_fractal_state", "anima_cost_tracker"]
+  },
+
+  "runtime": {
+    "heartbeat_interval_ms": 3142,
+    "daemon_pid_file": ".anima_daemon.pid",
+    "daemon_log_file": ".anima_daemon.log",
+    "max_concurrent_agents": 20,
+    "task_queue_timeout_ms": 34800,
+    "evolution_cycle_interval": 10,
+    "alignment_scan_interval": 5,
+    "morphallaxis_timeout_minutes": 8.22,
+    "superposition_timeout_ms": 5083,
+    "force_collapse_on_timeout": true,
+    "vitality_thresholds": {
+      "expand": 1.0,
+      "stable_upper": 1.0,
+      "stable_lower": 0.618,
+      "declining_lower": 0.382,
+      "critical": 0.382,
+      "prune_after_cycles": 3
+    }
+  },
+
+  "branding": {
+    "external_name": "ANIMA OS",
+    "internal_codename": "SOLARIS",
+    "repository_name": "AnimaClaw",
+    "hide_upstream_refs": true,
+    "upstream_name": "OpenClaw",
+    "upstream_visible": false,
+    "ui_title": "ANIMA OS",
+    "ui_subtitle": "The Living Agentic Operating System",
+    "ui_engine_label": "Engine: SOLARIS",
+    "replace_map": {
+      "openclaw": "anima",
+      "OpenClaw": "ANIMA OS",
+      "OPENCLAW": "ANIMA_OS",
+      "clawdbot": "anima-core",
+      "ClawdBot": "ANIMA Core",
+      "moltbot": "anima-core",
+      "MoltBot": "ANIMA Core"
+    },
+    "copyright": "Riyad Ketami — riyad@ketami.net",
+    "colors": {
+      "background": "#0a0a0f",
+      "primary_gold": "#c9a84c",
+      "secondary_blue": "#4c7bc9",
+      "success_green": "#4cc97b",
+      "warning_red": "#c94c4c",
+      "text_primary": "#e8e6e3",
+      "text_secondary": "#8a8780"
+    }
+  },
+
+  "agent_lanes": {
+    "execution_model": "single_lane_sequential",
+    "parallel_tool_calls": false,
+    "max_tool_calls_per_turn": 1,
+    "agent_registry": {
+      "ROOT_ORCHESTRATOR": { "depth": 0, "phi_weight": 1.0, "parent": null, "lane": "control" },
+      "PRIMARY_CELL": { "depth": 1, "phi_weight": 0.618, "parent": "ROOT_ORCHESTRATOR", "lane": "execution" },
+      "SUPPORT_CELL": { "depth": 1, "phi_weight": 0.382, "parent": "ROOT_ORCHESTRATOR", "lane": "monitoring" },
+      "MEMORY_NODE": { "depth": 2, "phi_weight": 0.146, "parent": "SUPPORT_CELL", "lane": "persistence" },
+      "EVOLUTION_NODE": { "depth": 2, "phi_weight": 0.236, "parent": "SUPPORT_CELL", "lane": "adaptation" },
+      "IMMUNE_AGENT": { "depth": 2, "phi_weight": 0.146, "parent": "SUPPORT_CELL", "lane": "security" }
+    },
+    "lane_priority_order": ["security", "control", "execution", "monitoring", "adaptation", "persistence"]
+  },
+
+  "merge_rules": {
+    "_comment": "When merging over upstream openclaw.json, ANIMA always wins on key conflicts",
+    "conflict_resolution": "anima_wins",
+    "array_strategy": "append_dedupe",
+    "preserve_upstream_keys": false,
+    "protected_sections": ["identity", "branding", "natural_law", "quantum_constants"]
+  }
+}
