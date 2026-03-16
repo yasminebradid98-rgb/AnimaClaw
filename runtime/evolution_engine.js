@@ -1,10 +1,16 @@
 /**
  * EVOLUTION ENGINE — Behavioral Evolution & QRL Learning
- * Runs every pi^2 cycles (~10 cycles) via EVOLUTION_NODE.
+ * Version: 1.1.0
+ * Engine: SOLARIS
+ * 
+ * Runs every π² cycles (~10 cycles) via EVOLUTION_NODE.
+ * Updates agent phi_weights and vitality in anima_fractal_state.
+ * Logs evolution cycles to anima_evolution_log.
  */
 
 const { PHI, PI, E, applyInterference } = require('./phi_core');
 const { calculateQrlShift, eulerAmplification, qrlUpdate } = require('./quantum_engine');
+const naturalLaw = require('./natural_law');
 
 // --- ALIGNMENT ANALYSIS ---
 
@@ -56,11 +62,187 @@ function detectDrift(alignmentHistory) {
   };
 }
 
-// --- EVOLUTION CYCLE ---
+// --- EVOLUTION CYCLE (Database Integrated) ---
 
 /**
- * Run a full evolution analysis cycle.
+ * Run a full evolution cycle and update database.
+ * Called by pi_pulse_daemon every π² cycles.
+ * 
+ * @param {Object} supabase - Supabase client
+ * @param {number} cycle - Current cycle number
+ * @param {string} userId - User ID
  */
+async function runCycle(supabase, cycle, userId) {
+  console.log(`[EvolutionEngine] Running cycle ${cycle}...`);
+
+  // 1. Fetch recent agent logs for performance analysis
+  const { data: recentLogs, error: logsError } = await supabase
+    .from('anima_agent_logs')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('pi_pulse_timestamp', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24h
+    .order('pi_pulse_timestamp', { ascending: false });
+
+  if (logsError) {
+    console.error('[EvolutionEngine] Failed to fetch logs:', logsError);
+  }
+
+  // 2. Calculate global best (best alignment across all agents)
+  const globalBest = recentLogs && recentLogs.length > 0
+    ? Math.max(...recentLogs.map(l => l.mission_alignment || 0))
+    : 0.5;
+
+  // 3. Fetch current agent states
+  const { data: agents, error: agentsError } = await supabase
+    .from('anima_fractal_state')
+    .select('*')
+    .eq('user_id', userId)
+    .neq('status', 'PRUNED');
+
+  if (agentsError) {
+    throw new Error(`Failed to fetch agents: ${agentsError.message}`);
+  }
+
+  const results = {
+    cycle,
+    timestamp: new Date().toISOString(),
+    mutations: [],
+    pruned: [],
+    spawned: [],
+    phi_adjustments: {},
+    global_alignment: globalBest,
+  };
+
+  // 4. Analyze each agent and update DB
+  for (const agent of agents || []) {
+    const agentLogs = (recentLogs || []).filter(l => l.agent_name === agent.branch_id);
+    
+    // Calculate personal best from this agent's logs
+    const personalBest = agentLogs.length > 0
+      ? Math.max(...agentLogs.map(l => l.mission_alignment || 0))
+      : (agent.personal_best || 0.5);
+
+    // Alignment history for drift detection
+    const alignmentHistory = agentLogs
+      .map(l => l.mission_alignment || 0)
+      .reverse(); // Oldest first
+
+    const drift = detectDrift(alignmentHistory);
+
+    // Calculate new phi_weight based on performance
+    let newPhiWeight = agent.phi_weight || naturalLaw.AGENT_REGISTRY[agent.branch_id]?.phi_weight || 0.5;
+    
+    if (personalBest > agent.global_best || 0) {
+      // Agent is improving - increase weight (max 1.0)
+      newPhiWeight = Math.min(1.0, newPhiWeight * 1.05);
+      results.mutations.push({
+        branch_id: agent.branch_id,
+        mutation_type: 'PHI_AMPLIFICATION',
+        description: `Performance improved (${personalBest.toFixed(3)} > ${(agent.global_best || 0).toFixed(3)}). Increasing φ-weight.`,
+        old_phi: agent.phi_weight,
+        new_phi: newPhiWeight,
+      });
+    } else if (drift.drifting && drift.severity === 'HIGH') {
+      // Agent is drifting - decrease weight (min 0.1)
+      newPhiWeight = Math.max(0.1, newPhiWeight * 0.95);
+      results.mutations.push({
+        branch_id: agent.branch_id,
+        mutation_type: 'PHI_SUPPRESSION',
+        description: `Drift detected (${drift.drift_score.toFixed(3)}). Decreasing φ-weight.`,
+        old_phi: agent.phi_weight,
+        new_phi: newPhiWeight,
+      });
+    }
+
+    // Calculate new vitality
+    const newVitality = naturalLaw.calculateVitality(
+      agent.depth_level || 0,
+      personalBest,
+      1,
+      agent.spawn_count > 0 ? agent.spawn_count / 8 : 0.5
+    );
+
+    // Update agent in database
+    const { error: updateError } = await supabase
+      .from('anima_fractal_state')
+      .update({
+        personal_best: personalBest,
+        global_best: globalBest,
+        phi_weight: newPhiWeight,
+        vitality_score: newVitality,
+        status: drift.drifting && drift.severity === 'HIGH' ? 'HEALING' : agent.status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', agent.id);
+
+    if (updateError) {
+      console.error(`[EvolutionEngine] Failed to update ${agent.branch_id}:`, updateError);
+    }
+
+    results.phi_adjustments[agent.branch_id] = {
+      old: agent.phi_weight,
+      new: newPhiWeight,
+      personal_best: personalBest,
+    };
+
+    // Check for prune condition: vitality < 0.382 for 3+ cycles
+    const vitalityHistory = agentLogs.slice(0, 3).map(l => l.vitality_score || 0);
+    if (vitalityHistory.length >= 3 && vitalityHistory.every(v => v < 0.382)) {
+      results.pruned.push({
+        branch_id: agent.branch_id,
+        reason: 'sustained_low_vitality',
+        last_vitality: vitalityHistory[0],
+      });
+
+      // Mark as PRUNED in DB
+      await supabase
+        .from('anima_fractal_state')
+        .update({ status: 'PRUNED' })
+        .eq('id', agent.id);
+    }
+  }
+
+  // 5. Check if spawning needed (morphallaxis)
+  const aliveCount = (agents || []).filter(a => a.status === 'ALIVE').length;
+  const prunedCount = results.pruned.length;
+  if (prunedCount > 0 && aliveCount - prunedCount < 3) {
+    results.spawned.push({
+      reason: 'morphallaxis_respawn',
+      count: prunedCount,
+    });
+  }
+
+  // 6. Log to anima_evolution_log
+  const { error: logError } = await supabase
+    .from('anima_evolution_log')
+    .insert({
+      cycle_number: cycle,
+      global_alignment: globalBest,
+      personal_best: Math.max(...(agents || []).map(a => a.personal_best || 0), 0),
+      evolution_triggered: results.mutations.length > 0 || results.pruned.length > 0,
+      mutation_description: results.mutations.map(m => m.description).join('; ') || 'No mutations',
+      branches_pruned: results.pruned.length,
+      branches_spawned: results.spawned.length,
+      phi_adjustments: results.phi_adjustments,
+      user_id: userId,
+    });
+
+  if (logError) {
+    console.error('[EvolutionEngine] Failed to log evolution:', logError);
+  }
+
+  console.log(`[EvolutionEngine] Cycle ${cycle} complete:`, {
+    mutations: results.mutations.length,
+    pruned: results.pruned.length,
+    spawned: results.spawned.length,
+    global_best: globalBest.toFixed(4),
+  });
+
+  return results;
+}
+
+// --- LEGACY: Non-async evolution cycle (for backwards compatibility) ---
+
 function runEvolutionCycle(agents, cycle, missionDna) {
   const results = {
     cycle,
@@ -118,25 +300,16 @@ function runEvolutionCycle(agents, cycle, missionDna) {
 
 // --- REWARD AMPLIFICATION ---
 
-/**
- * Calculate success reward using Euler's number (Law 4).
- */
 function successReward(alignmentScore, cycleNumber) {
   return Math.exp(alignmentScore * cycleNumber);
 }
 
-/**
- * Calculate failure penalty using Euler's number (Law 4).
- */
 function failurePenalty(driftScore, cycleNumber) {
   return Math.exp(-driftScore * cycleNumber);
 }
 
 // --- SOUL TEMPLATE MUTATION ---
 
-/**
- * Generate a mutation proposal for SOUL_TEMPLATE.md.
- */
 function proposeMutation(agent, bestStrategy, personalBest, cycle) {
   return {
     source_agent: agent.branch_id,
@@ -154,9 +327,6 @@ function proposeMutation(agent, bestStrategy, personalBest, cycle) {
 
 // --- MORPHALLAXIS ---
 
-/**
- * Run morphallaxis (regeneration) protocol.
- */
 function morphallaxis(agents, trigger) {
   const steps = [];
 
@@ -206,10 +376,13 @@ function morphallaxis(agents, trigger) {
   };
 }
 
+// --- EXPORTS ---
+
 module.exports = {
   calculateAlignment,
   detectDrift,
-  runEvolutionCycle,
+  runCycle,              // NEW: Async DB-integrated version
+  runEvolutionCycle,     // LEGACY: Non-async version
   successReward,
   failurePenalty,
   proposeMutation,

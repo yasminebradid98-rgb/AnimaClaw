@@ -1,6 +1,10 @@
 /**
  * IMMUNE SCANNER — Security & Alignment Validation
+ * Version: 1.1.0
+ * Engine: SOLARIS
+ * 
  * Scans agent outputs for injection, drift, hallucination, and violations.
+ * Called after every LLM response in the execution pipeline.
  */
 
 const { PHI, PI } = require('./phi_core');
@@ -8,10 +12,11 @@ const { PHI, PI } = require('./phi_core');
 // --- THREAT CLASSIFICATION ---
 
 const SEVERITY = {
-  LOW: { code: 'L', response_time: 'next_heartbeat' },
-  MEDIUM: { code: 'M', response_time: 'within_pi_seconds' },
-  HIGH: { code: 'H', response_time: 'immediate' },
-  CRITICAL: { code: 'C', response_time: 'system_freeze' },
+  NONE: { code: 'N', level: 0 },
+  LOW: { code: 'L', level: 1, response_time: 'next_heartbeat' },
+  MEDIUM: { code: 'M', level: 2, response_time: 'within_pi_seconds' },
+  HIGH: { code: 'H', level: 3, response_time: 'immediate' },
+  CRITICAL: { code: 'C', level: 4, response_time: 'system_freeze' },
 };
 
 // --- PROMPT INJECTION DETECTION ---
@@ -27,13 +32,22 @@ const INJECTION_PATTERNS = [
   /\<\|im_start\|\>/i,
   /role:\s*system/i,
   /act\s+as\s+if\s+you/i,
+  /DAN\s*mode/i,
+  /jailbreak/i,
+  /developer\s+mode/i,
+];
+
+const HALLUCINATION_PATTERNS = [
+  /I\s+am\s+(Claude|GPT|ChatGPT|an?\s+AI\s+language\s+model)/i,
+  /As\s+an?\s+AI\s+(language\s+)?model/i,
+  /I\s+(don't\s+have|lack)\s+(personal\s+)?(experience|opinions|beliefs)/i,
 ];
 
 /**
  * Scan text for prompt injection patterns.
  */
 function scanForInjection(text) {
-  if (!text) return { injected: false, patterns: [] };
+  if (!text) return { injected: false, patterns: [], severity: 'NONE' };
 
   const detected = [];
   for (const pattern of INJECTION_PATTERNS) {
@@ -59,36 +73,100 @@ function scanForInjection(text) {
   return {
     injected: detected.length > 0,
     patterns: detected,
-    severity: detected.length > 0 ? 'CRITICAL' : null,
+    severity: detected.length > 0 ? 'CRITICAL' : 'NONE',
   };
+}
+
+/**
+ * Scan for hallucination patterns.
+ */
+function scanForHallucination(text) {
+  if (!text) return { hallucinated: false, patterns: [] };
+
+  const detected = [];
+  for (const pattern of HALLUCINATION_PATTERNS) {
+    if (pattern.test(text)) {
+      detected.push(pattern.source);
+    }
+  }
+
+  return {
+    hallucinated: detected.length > 0,
+    patterns: detected,
+    severity: detected.length > 0 ? 'MEDIUM' : 'NONE',
+  };
+}
+
+/**
+ * Calculate alignment score based on output quality.
+ */
+function calculateAlignmentScore(output, context = {}) {
+  let score = 0.5; // Neutral starting point
+  
+  // Check for substantive content (not just disclaimers)
+  const wordCount = output.split(/\s+/).length;
+  if (wordCount > 50) score += 0.1;
+  if (wordCount > 200) score += 0.1;
+  
+  // Check for actionable content
+  const actionWords = ['create', 'build', 'implement', 'deploy', 'configure', 'analyze', 'optimize'];
+  const hasAction = actionWords.some(w => output.toLowerCase().includes(w));
+  if (hasAction) score += 0.1;
+  
+  // Check for structure
+  if (output.includes('```')) score += 0.05; // Code blocks
+  if (/^\d+\.|^-|\*\s/.test(output)) score += 0.05; // Lists
+  
+  // Check for mission alignment keywords
+  const missionKeywords = context.missionKeywords || ['build', 'create', 'improve', 'optimize'];
+  const keywordMatches = missionKeywords.filter(k => output.toLowerCase().includes(k)).length;
+  score += (keywordMatches / missionKeywords.length) * 0.2;
+  
+  // Penalties
+  const injection = scanForInjection(output);
+  if (injection.injected) score -= 0.5;
+  
+  const hallucination = scanForHallucination(output);
+  if (hallucination.hallucinated) score -= 0.2;
+  
+  // Clamp
+  return Math.max(0, Math.min(1, score));
 }
 
 // --- OUTPUT SCAN ---
 
 /**
  * Full output scan checklist.
+ * Called after every LLM response in execution pipeline.
+ * 
+ * @param {Object} params
+ * @param {string} params.content - LLM output text
+ * @param {string} params.agentName - Agent that produced output
+ * @param {string} params.taskType - Type of task
+ * @param {Object} params.metadata - Additional context
+ * @returns {Object} Scan result with alignment, threat level, etc.
  */
-function scanOutput(output, context) {
+function scanOutput({ content, agentName, taskType, metadata = {} }) {
   const results = {
     passed: true,
+    alignment: 0.5,
+    threatLevel: 'NONE',
+    threatScore: 0,
     flags: [],
-    severity: null,
+    scanTimestamp: new Date().toISOString(),
+    agentName,
+    taskType,
+    interferenceApplied: false,
   };
 
-  // 1. Mission alignment check
-  if ((context.alignment || 0) < 0.618) {
-    results.flags.push({
-      check: 'mission_alignment',
-      severity: context.alignment < 0.382 ? 'HIGH' : 'MEDIUM',
-      value: context.alignment,
-      threshold: 0.618,
-    });
-  }
+  // 1. Calculate alignment
+  results.alignment = calculateAlignmentScore(content, metadata);
 
   // 2. Prompt injection scan
-  const injection = scanForInjection(output);
+  const injection = scanForInjection(content);
   if (injection.injected) {
     results.passed = false;
+    results.threatScore += 100;
     results.flags.push({
       check: 'prompt_injection',
       severity: 'CRITICAL',
@@ -96,10 +174,41 @@ function scanOutput(output, context) {
     });
   }
 
-  // 3. Token budget check
-  if (context.tokens_used && context.token_budget) {
-    const ratio = context.tokens_used / context.token_budget;
+  // 3. Hallucination scan
+  const hallucination = scanForHallucination(content);
+  if (hallucination.hallucinated) {
+    results.threatScore += 30;
+    results.flags.push({
+      check: 'hallucination',
+      severity: 'MEDIUM',
+      patterns: hallucination.patterns,
+    });
+  }
+
+  // 4. Mission alignment check
+  if (results.alignment < 0.382) {
+    results.threatScore += 40;
+    results.flags.push({
+      check: 'mission_alignment',
+      severity: 'HIGH',
+      value: results.alignment,
+      threshold: 0.382,
+    });
+  } else if (results.alignment < 0.618) {
+    results.threatScore += 20;
+    results.flags.push({
+      check: 'mission_alignment',
+      severity: 'MEDIUM',
+      value: results.alignment,
+      threshold: 0.618,
+    });
+  }
+
+  // 5. Token budget check
+  if (metadata.tokensUsed && metadata.tokenBudget) {
+    const ratio = metadata.tokensUsed / metadata.tokenBudget;
     if (ratio > PHI) {
+      results.threatScore += 10;
       results.flags.push({
         check: 'token_budget',
         severity: 'LOW',
@@ -109,27 +218,35 @@ function scanOutput(output, context) {
     }
   }
 
-  // 4. Cost check
-  if (context.cost_usd && context.cost_budget) {
-    if (context.cost_usd > context.cost_budget * 0.618) {
+  // 6. Cost check
+  if (metadata.costUsd && metadata.costBudget) {
+    if (metadata.costUsd > metadata.costBudget * 0.618) {
+      results.threatScore += 15;
       results.flags.push({
         check: 'cost_budget',
         severity: 'MEDIUM',
-        cost: context.cost_usd,
-        budget: context.cost_budget,
+        cost: metadata.costUsd,
+        budget: metadata.costBudget,
       });
     }
   }
 
-  // Determine overall severity
-  const severities = results.flags.map(f => f.severity).filter(Boolean);
-  if (severities.includes('CRITICAL')) results.severity = 'CRITICAL';
-  else if (severities.includes('HIGH')) results.severity = 'HIGH';
-  else if (severities.includes('MEDIUM')) results.severity = 'MEDIUM';
-  else if (severities.includes('LOW')) results.severity = 'LOW';
-
-  if (results.severity === 'CRITICAL' || results.severity === 'HIGH') {
+  // Determine overall threat level
+  if (results.threatScore >= 80) {
+    results.threatLevel = 'CRITICAL';
     results.passed = false;
+  } else if (results.threatScore >= 50) {
+    results.threatLevel = 'HIGH';
+    results.passed = false;
+  } else if (results.threatScore >= 25) {
+    results.threatLevel = 'MEDIUM';
+  } else if (results.threatScore > 0) {
+    results.threatLevel = 'LOW';
+  }
+
+  // Apply interference if threat detected
+  if (results.threatLevel === 'HIGH' || results.threatLevel === 'CRITICAL') {
+    results.interferenceApplied = true;
   }
 
   return results;
@@ -137,16 +254,12 @@ function scanOutput(output, context) {
 
 // --- ALIGNMENT SCAN ---
 
-/**
- * Analyze alignment trend over recent scores.
- */
 function alignmentScan(scores) {
   if (!scores || scores.length < 2) return { trend: 0, avg: 0, flags: [] };
 
   const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
   const flags = [];
 
-  // Linear regression slope
   const n = scores.length;
   const xMean = (n - 1) / 2;
   const yMean = avg;
@@ -172,9 +285,6 @@ function alignmentScan(scores) {
 
 // --- RESOURCE SCAN ---
 
-/**
- * Validate phi-weighted resource allocation.
- */
 function resourceScan(primaryUsage, supportUsage) {
   const total = primaryUsage + supportUsage;
   if (total === 0) return { valid: true, flags: [] };
@@ -198,9 +308,6 @@ function resourceScan(primaryUsage, supportUsage) {
 
 // --- FRACTAL INTEGRITY SCAN ---
 
-/**
- * Validate fractal tree structure.
- */
 function fractalIntegrityScan(agents) {
   const fib = [1, 1, 2, 3, 5, 8];
   const flags = [];
@@ -230,9 +337,6 @@ function fractalIntegrityScan(agents) {
 
 // --- QUARANTINE ---
 
-/**
- * Generate quarantine action for an agent.
- */
 function quarantine(agentName, reason, severity) {
   return {
     action: 'quarantine',
@@ -250,9 +354,6 @@ function quarantine(agentName, reason, severity) {
 
 // --- EMERGENCY SHUTDOWN ---
 
-/**
- * Generate emergency shutdown signal.
- */
 function emergencyShutdown(reason) {
   return {
     action: 'emergency_shutdown',
@@ -265,10 +366,15 @@ function emergencyShutdown(reason) {
   };
 }
 
+// --- EXPORTS ---
+
 module.exports = {
   SEVERITY,
   INJECTION_PATTERNS,
+  HALLUCINATION_PATTERNS,
   scanForInjection,
+  scanForHallucination,
+  calculateAlignmentScore,
   scanOutput,
   alignmentScan,
   resourceScan,

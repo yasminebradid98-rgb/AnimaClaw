@@ -1,6 +1,6 @@
 -- ============================================================
 -- ANIMA OS — Supabase Database Schema
--- Version: 1.0.0
+-- Version: 1.5.0
 -- Engine: SOLARIS
 -- Author: Riyad Ketami <riyad@ketami.net>
 --
@@ -32,7 +32,11 @@ CREATE TABLE IF NOT EXISTS anima_agent_logs (
   pi_pulse_timestamp TIMESTAMPTZ DEFAULT NOW(),
   user_id UUID NOT NULL,
   archived_at TIMESTAMPTZ DEFAULT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  -- Immune scan results
+  immune_scan_result JSONB DEFAULT NULL,
+  threat_detected BOOLEAN DEFAULT FALSE,
+  threat_severity TEXT DEFAULT NULL CHECK (threat_severity IN (null, 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'))
 );
 
 CREATE INDEX idx_agent_logs_user_id ON anima_agent_logs(user_id);
@@ -41,13 +45,14 @@ CREATE INDEX idx_agent_logs_cycle ON anima_agent_logs(cycle_number);
 CREATE INDEX idx_agent_logs_timestamp ON anima_agent_logs(pi_pulse_timestamp DESC);
 CREATE INDEX idx_agent_logs_alignment ON anima_agent_logs(mission_alignment);
 CREATE INDEX idx_agent_logs_archived ON anima_agent_logs(archived_at) WHERE archived_at IS NULL;
+CREATE INDEX idx_agent_logs_threat ON anima_agent_logs(threat_detected, threat_severity) WHERE threat_detected = true;
 
 -- ============================================================
 -- TABLE 2: anima_fractal_state
 -- Tracks the live state of every agent in the fractal tree
 -- ============================================================
 
-CREATE TYPE agent_status AS ENUM ('ALIVE', 'HEALING', 'PRUNED', 'SPAWNING', 'EVOLVING');
+CREATE TYPE agent_status AS ENUM ('ALIVE', 'HEALING', 'PRUNED', 'SPAWNING', 'EVOLVING', 'DORMANT', 'QUARANTINED');
 
 CREATE TABLE IF NOT EXISTS anima_fractal_state (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -85,6 +90,7 @@ CREATE TABLE IF NOT EXISTS anima_evolution_log (
   mutation_description TEXT DEFAULT '',
   branches_pruned INTEGER DEFAULT 0 CHECK (branches_pruned >= 0),
   branches_spawned INTEGER DEFAULT 0 CHECK (branches_spawned >= 0),
+  phi_adjustments JSONB DEFAULT '{}'::jsonb, -- Track phi_weight changes per agent
   timestamp TIMESTAMPTZ DEFAULT NOW(),
   user_id UUID NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -134,6 +140,75 @@ CREATE TABLE IF NOT EXISTS anima_master_profile (
 );
 
 CREATE INDEX idx_master_user_id ON anima_master_profile(user_id);
+
+-- ============================================================
+-- TABLE 6: anima_task_queue (NEW v1.5)
+-- Task queue for LLM execution pipeline
+-- ============================================================
+
+CREATE TYPE task_status AS ENUM ('QUEUED', 'RUNNING', 'DONE', 'FAILED', 'CANCELLED');
+CREATE TYPE task_type AS ENUM ('LLM_CALL', 'IMMUNE_SCAN', 'EVOLUTION', 'COMPACTION', 'CUSTOM');
+
+CREATE TABLE IF NOT EXISTS anima_task_queue (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_name TEXT NOT NULL,
+  task_type task_type NOT NULL DEFAULT 'LLM_CALL',
+  task_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status task_status NOT NULL DEFAULT 'QUEUED',
+  priority INTEGER DEFAULT 5 CHECK (priority >= 1 AND priority <= 10),
+  
+  -- Result fields
+  result_json JSONB DEFAULT NULL,
+  error_message TEXT DEFAULT NULL,
+  tokens_used INTEGER DEFAULT 0 CHECK (tokens_used >= 0),
+  cost_usd NUMERIC(12, 6) DEFAULT 0.0,
+  
+  -- Timing
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  started_at TIMESTAMPTZ DEFAULT NULL,
+  completed_at TIMESTAMPTZ DEFAULT NULL,
+  
+  -- Foreign keys
+  user_id UUID NOT NULL,
+  agent_log_id UUID REFERENCES anima_agent_logs(id) ON DELETE SET NULL,
+  
+  -- Immune scan reference
+  immune_scan_id UUID DEFAULT NULL
+);
+
+CREATE INDEX idx_task_queue_user_id ON anima_task_queue(user_id);
+CREATE INDEX idx_task_queue_status ON anima_task_queue(status) WHERE status IN ('QUEUED', 'RUNNING');
+CREATE INDEX idx_task_queue_agent ON anima_task_queue(agent_name);
+CREATE INDEX idx_task_queue_priority ON anima_task_queue(priority DESC, created_at ASC);
+CREATE INDEX idx_task_queue_created ON anima_task_queue(created_at ASC);
+
+-- Function to get next task (atomic claim)
+CREATE OR REPLACE FUNCTION claim_next_task(p_user_id UUID)
+RETURNS anima_task_queue AS $$
+DECLARE
+  v_task anima_task_queue;
+BEGIN
+  SELECT * INTO v_task
+  FROM anima_task_queue
+  WHERE user_id = p_user_id
+    AND status = 'QUEUED'
+  ORDER BY priority DESC, created_at ASC
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED;
+  
+  IF FOUND THEN
+    UPDATE anima_task_queue
+    SET status = 'RUNNING',
+        started_at = NOW()
+    WHERE id = v_task.id;
+    
+    v_task.status := 'RUNNING';
+    v_task.started_at := NOW();
+  END IF;
+  
+  RETURN v_task;
+END;
+$$ LANGUAGE plpgsql;
 
 -- ============================================================
 -- HELPER FUNCTION: calculate_vitality
@@ -251,6 +326,7 @@ ALTER TABLE anima_fractal_state ENABLE ROW LEVEL SECURITY;
 ALTER TABLE anima_evolution_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE anima_cost_tracker ENABLE ROW LEVEL SECURITY;
 ALTER TABLE anima_master_profile ENABLE ROW LEVEL SECURITY;
+ALTER TABLE anima_task_queue ENABLE ROW LEVEL SECURITY;
 
 -- anima_agent_logs policies
 CREATE POLICY "Users can view own agent logs"
@@ -317,6 +393,23 @@ CREATE POLICY "Users can update own profile"
   ON anima_master_profile FOR UPDATE
   USING (auth.uid() = user_id);
 
+-- anima_task_queue policies
+CREATE POLICY "Users can view own tasks"
+  ON anima_task_queue FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own tasks"
+  ON anima_task_queue FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own tasks"
+  ON anima_task_queue FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own tasks"
+  ON anima_task_queue FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- ============================================================
 -- ENABLE REALTIME SUBSCRIPTIONS
 -- ============================================================
@@ -326,6 +419,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE anima_fractal_state;
 ALTER PUBLICATION supabase_realtime ADD TABLE anima_evolution_log;
 ALTER PUBLICATION supabase_realtime ADD TABLE anima_cost_tracker;
 ALTER PUBLICATION supabase_realtime ADD TABLE anima_master_profile;
+ALTER PUBLICATION supabase_realtime ADD TABLE anima_task_queue;
 
 -- ============================================================
 -- AUTO-UPDATE updated_at TRIGGER
@@ -387,10 +481,11 @@ CREATE INDEX IF NOT EXISTS idx_master_onboarding
 
 -- ============================================================
 -- DONE
--- Schema version: 1.4.0
--- Tables: 5
--- Functions: 3
--- Policies: 13
+-- Schema version: 1.5.0
+-- Tables: 6 (NEW: anima_task_queue)
+-- Functions: 4 (NEW: claim_next_task)
+-- Policies: 17
 -- Realtime: enabled on all tables
 -- v1.4: onboarding_complete, behavioral_log, oracle_version
+-- v1.5: anima_task_queue with task_status, task_type enums
 -- ============================================================
