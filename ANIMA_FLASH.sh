@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # ╔═══════════════════════════════════════════════════════════════════╗
-# ║  ANIMA OS — Flash Installer v1.2.0                              ║
+# ║  ANIMA OS — Flash Installer v1.5.0                              ║
 # ║  Engine: SOLARIS                                                 ║
 # ║  Author: Riyad Ketami — riyad@ketami.net                        ║
 # ║                                                                   ║
@@ -16,7 +16,7 @@ PHI="1.6180339887"
 PI="3.1415926535"
 EULER="2.7182818284"
 PSI="ψ"
-VERSION="1.3.0"
+VERSION="1.5.0"
 ENGINE="SOLARIS"
 
 OPENCLAW_DIR="$HOME/.openclaw"
@@ -72,7 +72,7 @@ cat << 'BANNER'
      ║                                                           ║
      ║          The Living Agentic Operating System              ║
      ║                  Engine: SOLARIS                           ║
-     ║                  Version: 1.3.0                           ║
+     ║                  Version: 1.5.0                           ║
      ║                                                           ║
      ╚═══════════════════════════════════════════════════════════╝
 BANNER

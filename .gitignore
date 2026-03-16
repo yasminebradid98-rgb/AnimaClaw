@@ -23,6 +23,16 @@ dist/
 
 # Vercel
 .vercel
+dashboard/.vercel/
+
+# Daemon / runtime artifacts
+.anima_watcher.pid
+.anima_daemon.pid
+*.pid
+
+# Watcher logs
+anima_watcher.log
+anima_converter.log
 
 # OS
 .DS_Store

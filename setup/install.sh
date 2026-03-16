@@ -2,7 +2,7 @@
 
 # ============================================================
 # ANIMA OS — One-Command Install Script
-# Version: 1.3.0
+# Version: 1.5.0
 # Engine: SOLARIS
 # Author: Riyad Ketami <riyad@ketami.net>
 #

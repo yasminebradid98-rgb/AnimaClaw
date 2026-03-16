@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PHI, PI, EULER, FIBONACCI_SEQUENCE } from '../lib/constants';
