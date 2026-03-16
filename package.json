@@ -29,9 +29,12 @@
     "dashboard:deploy": "cd dashboard && npx vercel --prod"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0"
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.4.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "supabase": "^2.78.1"
+  },
   "engines": {
     "node": ">=18.0.0"
   },
