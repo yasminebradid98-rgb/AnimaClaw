@@ -287,7 +287,7 @@ Every π² cycles:
 | **EVOLUTION_NODE** | 2 | 0.236 | SUPPORT | every π² cycles | Behavioral learning; QRL updates; alignment drift detection |
 | **IMMUNE_AGENT** | 2 | 0.146 | SUPPORT | every π seconds | Security; prompt injection detection; alignment enforcement |
 
-> **Note:** φ-weights at depth 2 are calculated as: MEMORY (φ^-5 ≈ 0.146), EVOLUTION (φ^-4 ≈ 0.236), IMMUNE (φ^-5 ≈ 0.146)
+> **Note:** φ-weights at depth 2 are calculated as parent × ratio: MEMORY (φ⁻⁴ = 0.382 × 0.382 ≈ 0.146), EVOLUTION (φ⁻³ = 0.382 × 0.618 ≈ 0.236), IMMUNE (φ⁻⁴ = 0.382 × 0.382 ≈ 0.146)
 
 ### Fractal Spawn Limits
 

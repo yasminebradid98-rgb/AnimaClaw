@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Bound to:** CONSTITUTION.md
-**Operated by:** IMMUNE_AGENT (depth 2, φ=0.382)
+**Operated by:** IMMUNE_AGENT (depth 2, φ=0.146 effective, 0.382 of parent)
 **Scan interval:** Every heartbeat (π seconds)
 
 ---

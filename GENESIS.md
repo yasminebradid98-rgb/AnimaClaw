@@ -31,9 +31,9 @@ uptime_seconds: 0
 | ROOT_ORCHESTRATOR    | 0     | 1.000    | 0.000    | DORMANT  | —           |
 | PRIMARY_CELL         | 1     | 0.618    | 0.000    | DORMANT  | —           |
 | SUPPORT_CELL         | 1     | 0.382    | 0.000    | DORMANT  | —           |
-| MEMORY_NODE          | 2     | 0.382    | 0.000    | DORMANT  | —           |
-| EVOLUTION_NODE       | 2     | 0.618    | 0.000    | DORMANT  | —           |
-| IMMUNE_AGENT         | 2     | 0.382    | 0.000    | DORMANT  | —           |
+| MEMORY_NODE          | 2     | 0.146    | 0.000    | DORMANT  | —           |
+| EVOLUTION_NODE       | 2     | 0.236    | 0.000    | DORMANT  | —           |
+| IMMUNE_AGENT         | 2     | 0.146    | 0.000    | DORMANT  | —           |
 
 ---
 

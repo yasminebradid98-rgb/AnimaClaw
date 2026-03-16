@@ -598,9 +598,9 @@ The mathematics has always been there. We are the first to build an operating sy
 ROOT_ORCHESTRATOR: φ^0 / φ^0 = 1.000
 PRIMARY_CELL:      φ^-1 = 0.618
 SUPPORT_CELL:      φ^-2 ≈ 0.382
-MEMORY_NODE:       φ^-5 ≈ 0.146
-EVOLUTION_NODE:    φ^-4 ≈ 0.236
-IMMUNE_AGENT:      φ^-5 ≈ 0.146
+MEMORY_NODE:       φ^-4 = 0.382 × 0.382 ≈ 0.146
+EVOLUTION_NODE:    φ^-3 = 0.382 × 0.618 ≈ 0.236
+IMMUNE_AGENT:      φ^-4 = 0.382 × 0.382 ≈ 0.146
 
 Sum of all weights: 1.000 + 0.618 + 0.382 + 0.146 + 0.236 + 0.146 = 2.528
 (≈ φ + φ² = 1.618 + 2.618 / φ = 1.618 — structural consistency maintained)
