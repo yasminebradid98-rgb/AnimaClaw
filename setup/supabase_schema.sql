@@ -91,14 +91,14 @@ CREATE TABLE IF NOT EXISTS anima_evolution_log (
   branches_pruned INTEGER DEFAULT 0 CHECK (branches_pruned >= 0),
   branches_spawned INTEGER DEFAULT 0 CHECK (branches_spawned >= 0),
   phi_adjustments JSONB DEFAULT '{}'::jsonb, -- Track phi_weight changes per agent
-  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  evolution_timestamp TIMESTAMPTZ DEFAULT NOW(),
   user_id UUID NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_evolution_user_id ON anima_evolution_log(user_id);
 CREATE INDEX idx_evolution_cycle ON anima_evolution_log(cycle_number DESC);
-CREATE INDEX idx_evolution_timestamp ON anima_evolution_log(timestamp DESC);
+CREATE INDEX idx_evolution_timestamp ON anima_evolution_log(evolution_timestamp DESC);
 
 -- ============================================================
 -- TABLE 4: anima_cost_tracker
@@ -297,7 +297,7 @@ RETURNS TABLE (
   cycle_number INTEGER,
   avg_alignment NUMERIC,
   agent_count BIGINT,
-  timestamp TIMESTAMPTZ
+  evolution_timestamp TIMESTAMPTZ
 ) AS $$
 BEGIN
   RETURN QUERY
@@ -305,7 +305,7 @@ BEGIN
     al.cycle_number,
     ROUND(AVG(al.mission_alignment), 4) AS avg_alignment,
     COUNT(DISTINCT al.agent_name)::BIGINT AS agent_count,
-    MAX(al.pi_pulse_timestamp) AS timestamp
+    MAX(al.pi_pulse_timestamp) AS evolution_timestamp
   FROM anima_agent_logs al
   WHERE al.user_id = p_user_id
     AND al.archived_at IS NULL
@@ -488,4 +488,5 @@ CREATE INDEX IF NOT EXISTS idx_master_onboarding
 -- Realtime: enabled on all tables
 -- v1.4: onboarding_complete, behavioral_log, oracle_version
 -- v1.5: anima_task_queue with task_status, task_type enums
+-- Fix: renamed reserved keyword 'timestamp' → 'evolution_timestamp'
 -- ============================================================

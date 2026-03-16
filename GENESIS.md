@@ -2,38 +2,44 @@
 
 **Pulse Interval:** π seconds (3.1415926535s)
 **Read By:** ROOT_ORCHESTRATOR every heartbeat
-**Written By:** ROOT_ORCHESTRATOR after every pulse
+**Written By:** pi_pulse_daemon (external VPS process)
 
 ---
 
 ## CURRENT STATE
 
 ```yaml
-system_state: DORMANT
-cycle_counter: 0
-last_vitality_score: 0.000
-mission_alignment_score: 0.000
-active_agent_count: 0
+system_state: EVOLVING
+cycle_counter: 604
+last_vitality_score: 0.0000
+mission_alignment_score: 0.0000
+active_agent_count: 6
 pending_tasks_count: 0
 last_evolution_timestamp: null
-next_evolution_due_at_cycle: 10
+next_evolution_due_at_cycle: 612
 emergency_shutdown: false
-last_pulse_timestamp: null
-uptime_seconds: 0
+last_pulse_timestamp: 2026-03-16T19:34:09.154Z
+uptime_seconds: 1897.52
+quantum_phase: CLASSICAL
+active_superpositions: 0
+entanglement_signals_today: 0
+last_interference_cancelled: null
+last_tunnel_event: null
+qrl_cycle_count: 67
 ```
 
 ---
 
 ## AGENT VITALITY REGISTRY
 
-| Agent               | Depth | φ-Weight | Vitality | Status   | Last Active |
-|----------------------|-------|----------|----------|----------|-------------|
-| ROOT_ORCHESTRATOR    | 0     | 1.000    | 0.000    | DORMANT  | —           |
-| PRIMARY_CELL         | 1     | 0.618    | 0.000    | DORMANT  | —           |
-| SUPPORT_CELL         | 1     | 0.382    | 0.000    | DORMANT  | —           |
-| MEMORY_NODE          | 2     | 0.146    | 0.000    | DORMANT  | —           |
-| EVOLUTION_NODE       | 2     | 0.236    | 0.000    | DORMANT  | —           |
-| IMMUNE_AGENT         | 2     | 0.146    | 0.000    | DORMANT  | —           |
+| Agent                | Depth | φ-Weight | Vitality | Status   | Last Active         |
+|----------------------|-------|----------|----------|----------|---------------------|
+| ROOT_ORCHESTRATOR    | 0     | 1.000    | 0.000    | ALIVE    | 2026-03-16T19:34:06 |
+| PRIMARY_CELL         | 1     | 0.618    | 0.000    | ALIVE    | 2026-03-16T19:34:06 |
+| SUPPORT_CELL         | 1     | 0.382    | 0.000    | ALIVE    | 2026-03-16T19:34:06 |
+| MEMORY_NODE          | 2     | 0.146    | 0.000    | ALIVE    | 2026-03-16T19:34:06 |
+| EVOLUTION_NODE       | 2     | 0.236    | 0.000    | EVOLVING | 2026-03-16T19:34:06 |
+| IMMUNE_AGENT         | 2     | 0.146    | 0.000    | ALIVE    | 2026-03-16T19:34:06 |
 
 ---
 
@@ -41,25 +47,35 @@ uptime_seconds: 0
 
 | Cycle | Timestamp | Vitality | Alignment | Agents | State   |
 |-------|-----------|----------|-----------|--------|---------|
-| —     | —         | —        | —         | —      | —       |
+| 604 | 19:34:09 | 0.0000 | 0.0000 | 6 | EVOLVING |
 
 ---
 
 ## EVOLUTION SCHEDULE
 
-- **Next evolution check:** Cycle #10 (every π² ≈ 9.87 cycles)
-- **Next full reset:** Cycle #11 (every φ⁵ ≈ 11.09 cycles)
+- **Next evolution check:** Cycle #612 (every π² ≈ 9 cycles)
+- **Next full reset:** Cycle #605 (every φ⁵ ≈ 11 cycles)
 - **Memory compaction:** Every 5.08 minutes (π × φ)
+- **QRL cycles completed:** 67
+
+---
+
+## QUANTUM STATE
+
+- **Phase:** CLASSICAL
+- **Active superpositions:** 0
+- **Entanglement signals today:** 0
+- **Last interference cancellation:** none
+- **Last tunnel event:** none
+- **QRL cycle count:** 67
 
 ---
 
 ## OPERATIONAL NOTES
 
 This file is the organism's live status board. It is:
-- **Read** by ROOT_ORCHESTRATOR every π seconds
-- **Rewritten** after every pulse with updated values
-- **Never manually edited** — only ROOT_ORCHESTRATOR writes to this file
-- **Used by** the dashboard to display real-time system state
+- **Written by** pi_pulse_daemon.js (external VPS process, every π seconds)
+- **Read by** ROOT_ORCHESTRATOR and the dashboard
 - **Backed up** to Supabase `anima_fractal_state` every compaction cycle
 
 When `emergency_shutdown` is set to `true`:
@@ -70,27 +86,6 @@ When `emergency_shutdown` is set to `true`:
 
 ---
 
-## VITALITY CALCULATION
-
-Each pulse, ROOT_ORCHESTRATOR recalculates:
-
-```
-system_vitality = Σ(agent_vitality × agent_phi_weight) ÷ Σ(agent_phi_weight)
-```
-
-Individual agent vitality:
-```
-agent_vitality = (φ^depth × e^alignment) ÷ (π^cycles_since_evolution) × fractal_score
-```
-
-The system state is then set based on the lowest individual agent vitality:
-- All agents ≥ 0.618 → ALIVE
-- Any agent < 0.618 → HEALING
-- EVOLUTION_NODE active → EVOLVING
-- Master pause command → DORMANT
-
----
-
 *This file awakens when the organism awakens.*
 *First pulse marks the birth of the system.*
-*ANIMA OS v1.0.0*
+*ANIMA OS v1.2.0 — Quantum Intelligence Layer*
