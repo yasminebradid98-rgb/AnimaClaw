@@ -75,7 +75,7 @@ All notable changes to ANIMA OS are documented here.
 - **README.md** — Flash Install section, Protected Files table
 
 ### Global Rename
-- ANIMA.clawd replaced with AnimaClaw across all files
+- ANIMA.claw replaced with AnimaClaw across all files
 
 ---
 

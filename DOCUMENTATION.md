@@ -92,7 +92,7 @@ ANIMA OS is structured in 7 layers, each with a distinct responsibility:
 ### File Structure
 
 ```
-ANIMA.clawd/
+AnimaClaw/
 ├── CONSTITUTION.md          # Laws 1–5 (immutable)
 ├── QUANTUM_CONSTITUTION.md  # Laws 6–12 (immutable)
 ├── SOUL_TEMPLATE.md         # Mission DNA template

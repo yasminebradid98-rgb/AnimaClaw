@@ -101,6 +101,10 @@ function scanForHallucination(text) {
  * Calculate alignment score based on output quality.
  */
 function calculateAlignmentScore(output, context = {}) {
+  if (!output || typeof output !== 'string') {
+    return 0.5; // Neutral score for invalid input
+  }
+  
   let score = 0.5; // Neutral starting point
   
   // Check for substantive content (not just disclaimers)
@@ -139,14 +143,23 @@ function calculateAlignmentScore(output, context = {}) {
  * Full output scan checklist.
  * Called after every LLM response in execution pipeline.
  * 
- * @param {Object} params
- * @param {string} params.content - LLM output text
- * @param {string} params.agentName - Agent that produced output
- * @param {string} params.taskType - Type of task
- * @param {Object} params.metadata - Additional context
+ * Supports two calling conventions:
+ *   New: scanOutput({ content, agentName, taskType, metadata })
+ *   Legacy: scanOutput(output, context) — for backward compatibility
+ * 
+ * @param {Object|string} paramsOrOutput - Either params object or output string (legacy)
+ * @param {Object} legacyContext - Context object (legacy mode)
  * @returns {Object} Scan result with alignment, threat level, etc.
  */
-function scanOutput({ content, agentName, taskType, metadata = {} }) {
+function scanOutput(paramsOrOutput, legacyContext) {
+  // Detect calling convention
+  const isLegacy = typeof paramsOrOutput === 'string' || !paramsOrOutput;
+  
+  const content = isLegacy ? paramsOrOutput : paramsOrOutput.content;
+  const agentName = isLegacy ? null : paramsOrOutput.agentName;
+  const taskType = isLegacy ? null : paramsOrOutput.taskType;
+  const metadata = isLegacy ? (legacyContext || {}) : (paramsOrOutput.metadata || {});
+  
   const results = {
     passed: true,
     alignment: 0.5,
@@ -204,9 +217,11 @@ function scanOutput({ content, agentName, taskType, metadata = {} }) {
     });
   }
 
-  // 5. Token budget check
-  if (metadata.tokensUsed && metadata.tokenBudget) {
-    const ratio = metadata.tokensUsed / metadata.tokenBudget;
+  // 5. Token budget check (support both camelCase and snake_case)
+  const tokensUsed = metadata.tokens_used || metadata.tokensUsed;
+  const tokenBudget = metadata.token_budget || metadata.tokenBudget;
+  if (tokensUsed && tokenBudget) {
+    const ratio = tokensUsed / tokenBudget;
     if (ratio > PHI) {
       results.threatScore += 10;
       results.flags.push({
@@ -218,15 +233,17 @@ function scanOutput({ content, agentName, taskType, metadata = {} }) {
     }
   }
 
-  // 6. Cost check
-  if (metadata.costUsd && metadata.costBudget) {
-    if (metadata.costUsd > metadata.costBudget * 0.618) {
+  // 6. Cost check (support both camelCase and snake_case)
+  const costUsd = metadata.cost_usd || metadata.costUsd;
+  const costBudget = metadata.cost_budget || metadata.costBudget;
+  if (costUsd && costBudget) {
+    if (costUsd > costBudget * 0.618) {
       results.threatScore += 15;
       results.flags.push({
         check: 'cost_budget',
         severity: 'MEDIUM',
-        cost: metadata.costUsd,
-        budget: metadata.costBudget,
+        cost: costUsd,
+        budget: costBudget,
       });
     }
   }
@@ -234,14 +251,20 @@ function scanOutput({ content, agentName, taskType, metadata = {} }) {
   // Determine overall threat level
   if (results.threatScore >= 80) {
     results.threatLevel = 'CRITICAL';
+    results.severity = 'CRITICAL'; // Backward compatibility
     results.passed = false;
   } else if (results.threatScore >= 50) {
     results.threatLevel = 'HIGH';
+    results.severity = 'HIGH'; // Backward compatibility
     results.passed = false;
   } else if (results.threatScore >= 25) {
     results.threatLevel = 'MEDIUM';
+    results.severity = 'MEDIUM'; // Backward compatibility
   } else if (results.threatScore > 0) {
     results.threatLevel = 'LOW';
+    results.severity = 'LOW'; // Backward compatibility
+  } else {
+    results.severity = null; // Backward compatibility
   }
 
   // Apply interference if threat detected
