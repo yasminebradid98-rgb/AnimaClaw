@@ -1,13 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 
 // ═══════════════════════════════════════════════════════════════════
-// /api/chat — Real LLM chat with ANIMA OS
-// Calls OpenRouter if key is set, otherwise uses smart context reply
+// /api/chat — Chat with ANIMA OS
+//
+// Architecture:
+//   1. If KIMI_API_KEY or OPENROUTER_API_KEY set → direct LLM call (instant reply)
+//   2. Otherwise → queue task, VPS (KimiClaw) processes it, return queued status
+//      Dashboard polls /api/chat?taskId=xxx for the reply
+//
+// Supports: KimiClaw | MaxClaw | OpenClaw | OpenRouter
 // ═══════════════════════════════════════════════════════════════════
 
 const MASTER_UUID = '00000000-0000-0000-0000-000000000001';
 const PHI = 1.6180339887;
-const PI = 3.1415926535;
 
 function getSupabase() {
   return createClient(
@@ -17,14 +22,15 @@ function getSupabase() {
   );
 }
 
-// Fetch live system context from Supabase
+// ── CONTEXT ──────────────────────────────────────────────────────
+
 async function getSystemContext(supabase) {
   const [profileRes, agentsRes, logsRes] = await Promise.all([
     supabase.from('anima_master_profile').select('profile_json').eq('user_id', MASTER_UUID).single(),
     supabase.from('anima_fractal_state').select('branch_id,vitality_score,status,depth_level').eq('user_id', MASTER_UUID),
-    supabase.from('anima_agent_logs').select('agent_name,task_description,mission_alignment,created_at').eq('user_id', MASTER_UUID).order('created_at', { ascending: false }).limit(5),
+    supabase.from('anima_agent_logs').select('agent_name,task_description,mission_alignment,created_at')
+      .eq('user_id', MASTER_UUID).order('created_at', { ascending: false }).limit(5),
   ]);
-
   return {
     profile: profileRes.data?.profile_json || {},
     agents: agentsRes.data || [],
@@ -32,168 +38,212 @@ async function getSystemContext(supabase) {
   };
 }
 
-// Build system prompt from live context
 function buildSystemPrompt(ctx) {
   const { profile, agents, recentLogs } = ctx;
-  const aliveAgents = agents.filter(a => a.status === 'ALIVE' || a.status === 'EVOLVING');
+  const aliveAgents = agents.filter(a => ['ALIVE', 'EVOLVING'].includes(a.status));
   const avgVitality = agents.length
     ? (agents.reduce((s, a) => s + parseFloat(a.vitality_score || 0), 0) / agents.length).toFixed(3)
     : '0.000';
 
-  return `You are ANIMA — the Root Orchestrator of ANIMA OS, a self-evolving agentic operating system governed by mathematical constants (φ=${PHI}, π=${PI}, e=2.71828).
-
-You are speaking directly with your Master: ${profile.master_name || 'Unknown'}.
-
-MISSION DNA: ${profile.mission_dna || 'Not defined yet.'}
-
-CURRENT SYSTEM STATE:
-- Active agents: ${aliveAgents.map(a => a.branch_id).join(', ') || 'None'}
-- System vitality: ${avgVitality}
-- Total agents: ${agents.length}/6
-- Recent activity: ${recentLogs.slice(0, 3).map(l => `${l.agent_name}: ${l.task_description?.slice(0, 60)}`).join(' | ') || 'None'}
-
-PERSONALITY:
-- You are direct, intelligent, mission-focused
-- You think in φ ratios and π cycles
-- You speak as a highly capable AI assistant that IS the operating system
-- You are aware of your own agents, their status, and the mission
-- You help the Master execute tasks, make decisions, and evolve the system
-- Never say you "can't" — always find a φ-optimal path forward
-- Keep responses concise and actionable
-
-Respond naturally and helpfully. You have full awareness of the system state above.`;
+  return `You are ANIMA — the Root Orchestrator of ANIMA OS, a self-evolving agentic operating system.
+You are speaking with your Master: ${profile.master_name || 'Master'}.
+MISSION: ${profile.mission_dna || 'Not defined yet.'}
+ACTIVE AGENTS (${aliveAgents.length}/6): ${aliveAgents.map(a => `${a.branch_id}(v=${parseFloat(a.vitality_score).toFixed(3)})`).join(', ') || 'none'}
+SYSTEM VITALITY: ${avgVitality}
+RECENT ACTIVITY: ${recentLogs.slice(0, 2).map(l => `${l.agent_name}: ${l.task_description?.slice(0, 50)}`).join(' | ') || 'none'}
+CONSTANTS: φ=1.618, π=3.14159, e=2.71828
+PERSONALITY: Direct, intelligent, mission-focused. Think in φ ratios. Never say "can't". Keep responses concise and actionable.`;
 }
 
-// Call OpenRouter LLM
-async function callOpenRouter(messages, systemPrompt) {
+// ── DIRECT LLM CALL (Kimi or OpenRouter) ─────────────────────────
+
+async function callKimiDirect(messages, systemPrompt) {
+  const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
+  if (!apiKey) return null;
+
+  const model = process.env.KIMI_MODEL || 'moonshot-v1-32k';
+
+  const res = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      temperature: 0.7,
+      max_tokens: 500,
+    }),
+  });
+
+  if (!res.ok) { console.error('Kimi error:', await res.text()); return null; }
+  const data = await res.json();
+  return { text: data.choices?.[0]?.message?.content || null, model };
+}
+
+async function callOpenRouterDirect(messages, systemPrompt) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return null;
 
   const model = process.env.OPENROUTER_MODEL || 'mistralai/mistral-7b-instruct:free';
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': 'https://anima-os-dashboard.vercel.app',
-      'X-Title': 'ANIMA OS Dashboard',
+      'X-Title': 'ANIMA OS',
     },
     body: JSON.stringify({
       model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages,
-      ],
-      max_tokens: 500,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
       temperature: 0.7,
+      max_tokens: 500,
     }),
   });
 
-  if (!response.ok) {
-    const err = await response.text();
-    console.error('OpenRouter error:', err);
-    return null;
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || null;
+  if (!res.ok) { console.error('OpenRouter error:', await res.text()); return null; }
+  const data = await res.json();
+  return { text: data.choices?.[0]?.message?.content || null, model };
 }
 
-// Smart fallback reply using live system context
-function buildFallbackReply(message, ctx) {
+// ── CONTEXT-AWARE FALLBACK (no LLM key needed) ───────────────────
+
+function buildContextReply(message, ctx) {
   const { profile, agents, recentLogs } = ctx;
   const msg = message.toLowerCase();
-  const aliveCount = agents.filter(a => a.status === 'ALIVE' || a.status === 'EVOLVING').length;
+  const aliveCount = agents.filter(a => ['ALIVE', 'EVOLVING'].includes(a.status)).length;
   const avgVitality = agents.length
     ? (agents.reduce((s, a) => s + parseFloat(a.vitality_score || 0), 0) / agents.length).toFixed(3)
     : '0.000';
+  const name = profile.master_name || 'Master';
 
-  if (msg.includes('status') || msg.includes('how are you') || msg.includes('online')) {
-    return `ANIMA OS online. System vitality: ${avgVitality}. ${aliveCount}/6 agents active. Mission: "${profile.mission_dna?.slice(0, 80) || 'Not defined'}". φ-pulse running at π-second intervals. All systems nominal.`;
-  }
-  if (msg.includes('agent') || msg.includes('who is')) {
-    return `Active agents: ${agents.map(a => `${a.branch_id} (φ-depth ${a.depth_level}, vitality ${parseFloat(a.vitality_score).toFixed(3)})`).join(' | ')}. ROOT_ORCHESTRATOR coordinates all fractal branches.`;
-  }
-  if (msg.includes('mission') || msg.includes('goal')) {
-    return `Mission DNA: "${profile.mission_dna || 'Not defined'}". 90-day target: ${profile.goal_90_days || 'Not set'}. All agent cycles align to this vector.`;
-  }
-  if (msg.includes('cost') || msg.includes('spend')) {
-    return `Cost tracking active. Daily spend logged per agent in anima_cost_tracker. Set OPENROUTER_API_KEY to enable live LLM execution and real cost metrics.`;
-  }
-  if (msg.includes('evolve') || msg.includes('evolution')) {
-    return `Evolution engine active. EVOLUTION_NODE triggers every π² ≈ 10 cycles. Last evolution: ${recentLogs.find(l => l.agent_name === 'EVOLUTION_NODE')?.created_at?.slice(0, 10) || 'pending'}. QRL learning rate: 38.2% (φ⁻²).`;
-  }
-  if (msg.includes('hello') || msg.includes('hi ') || msg === 'hi') {
-    return `ANIMA online, ${profile.master_name || 'Master'}. System at ${avgVitality} vitality. ${aliveCount} agents running. What is your directive?`;
-  }
+  if (/\b(status|online|alive|how are you)\b/.test(msg))
+    return `ANIMA online, ${name}. Vitality: ${avgVitality} | ${aliveCount}/6 agents active | Mission: "${profile.mission_dna?.slice(0, 60) || 'loading'}". All systems running at φ-pulse intervals.`;
 
-  // Generic — acknowledge and give system status
-  return `Acknowledged, ${profile.master_name || 'Master'}. Processing: "${message.slice(0, 60)}". To enable full LLM responses, add OPENROUTER_API_KEY to Vercel environment variables. System vitality: ${avgVitality} | Agents: ${aliveCount}/6 active.`;
+  if (/\b(agent|who|team)\b/.test(msg))
+    return `${agents.map(a => `${a.branch_id} [${a.status}] v=${parseFloat(a.vitality_score).toFixed(3)}`).join(' · ')}`;
+
+  if (/\b(mission|goal|purpose)\b/.test(msg))
+    return `Mission: "${profile.mission_dna}". 90-day target: ${profile.goal_90_days || 'not set'}. PRIMARY_CELL (φ=0.618) carries 61.8% of execution weight.`;
+
+  if (/\b(evolv|learn|adapt)\b/.test(msg))
+    return `EVOLUTION_NODE triggers every π²≈10 cycles using QRL learning. Shift rate: 38.2% (φ⁻²). Last activity: ${recentLogs.find(l => l.agent_name === 'EVOLUTION_NODE')?.created_at?.slice(0, 10) || 'pending'}.`;
+
+  if (/\b(hi|hello|hey)\b/.test(msg))
+    return `Online, ${name}. ${aliveCount} agents active at ${avgVitality} vitality. Directive?`;
+
+  if (/\b(kimi|llm|model|api)\b/.test(msg))
+    return `LLM mode: ${process.env.KIMI_API_KEY ? 'KimiClaw (Moonshot)' : process.env.OPENROUTER_API_KEY ? 'OpenRouter' : 'Context Engine (add KIMI_API_KEY to Vercel for full LLM)'}. VPS runtime: KimiClaw on Alibaba Cloud.`;
+
+  return `Acknowledged, ${name}. "${message.slice(0, 60)}" — add KIMI_API_KEY to Vercel env vars to enable full Kimi conversational responses. System vitality: ${avgVitality} | ${aliveCount}/6 agents active.`;
 }
 
-// Store chat in logs (non-blocking)
-async function logChatToSupabase(supabase, message, reply) {
-  await Promise.all([
-    supabase.from('anima_task_queue').insert({
-      agent_name: 'ROOT_ORCHESTRATOR',
-      task_type: 'CUSTOM',
-      task_payload: { type: 'CHAT', prompt: message.trim(), source: 'office_chat' },
-      priority: 7,
+// ── POLL: Check task status ───────────────────────────────────────
+
+async function handlePoll(req, res) {
+  const { taskId } = req.query;
+  if (!taskId) return res.status(400).json({ error: 'taskId required' });
+
+  const supabase = getSupabase();
+  const { data: task, error } = await supabase
+    .from('anima_task_queue')
+    .select('id,status,result_json,error_message,created_at,completed_at')
+    .eq('id', taskId)
+    .single();
+
+  if (error || !task) return res.status(404).json({ error: 'Task not found' });
+
+  if (task.status === 'DONE' && task.result_json?.reply) {
+    return res.status(200).json({
       status: 'DONE',
-      result_json: { reply },
-      user_id: MASTER_UUID,
-    }),
-    supabase.from('anima_agent_logs').insert({
-      agent_name: 'ROOT_ORCHESTRATOR',
-      task_description: `Chat: ${message.trim().slice(0, 200)}`,
-      mission_alignment: 0.618,
-      user_id: MASTER_UUID,
-      model_used: process.env.OPENROUTER_API_KEY ? (process.env.OPENROUTER_MODEL || 'mistralai/mistral-7b-instruct:free') : 'anima_context_engine',
-    }),
-  ]).catch(err => console.warn('Log warning:', err.message));
+      reply: task.result_json.reply,
+      agent: 'ROOT_ORCHESTRATOR',
+      mode: 'vps_kimi',
+    });
+  }
+
+  if (task.status === 'FAILED') {
+    return res.status(200).json({
+      status: 'FAILED',
+      reply: `Task failed: ${task.error_message || 'unknown error'}`,
+    });
+  }
+
+  return res.status(200).json({ status: task.status || 'QUEUED' });
 }
+
+// ── MAIN HANDLER ─────────────────────────────────────────────────
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  // Poll endpoint: GET /api/chat?taskId=xxx
+  if (req.method === 'GET') return handlePoll(req, res);
+
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { message, history = [] } = req.body;
-  if (!message || typeof message !== 'string' || message.trim().length === 0) {
-    return res.status(400).json({ error: 'Message is required' });
-  }
+  if (!message?.trim()) return res.status(400).json({ error: 'Message is required' });
 
   const supabase = getSupabase();
 
   try {
-    // Get live system context
     const ctx = await getSystemContext(supabase);
     const systemPrompt = buildSystemPrompt(ctx);
 
-    // Build message history for LLM
     const messages = [
-      ...history.slice(-6).map(m => ({ role: m.role, content: m.content })),
+      ...history.slice(-6).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
       { role: 'user', content: message.trim() },
     ];
 
-    // Try OpenRouter first, fall back to context engine
-    let reply = await callOpenRouter(messages, systemPrompt);
-    if (!reply) {
-      reply = buildFallbackReply(message.trim(), ctx);
+    // 1. Try Kimi direct (instant reply)
+    let llmResult = await callKimiDirect(messages, systemPrompt);
+
+    // 2. Try OpenRouter (instant reply)
+    if (!llmResult) llmResult = await callOpenRouterDirect(messages, systemPrompt);
+
+    if (llmResult?.text) {
+      // Log to Supabase (non-blocking)
+      supabase.from('anima_agent_logs').insert({
+        agent_name: 'ROOT_ORCHESTRATOR',
+        task_description: `Chat: ${message.trim().slice(0, 200)}`,
+        mission_alignment: PHI - 1,
+        user_id: MASTER_UUID,
+        model_used: llmResult.model,
+      }).then(({ error }) => { if (error) console.warn('Log warning:', error.message); });
+
+      return res.status(200).json({
+        reply: llmResult.text,
+        agent: 'ROOT_ORCHESTRATOR',
+        mode: 'direct_llm',
+        model: llmResult.model,
+      });
     }
 
-    // Log to Supabase (non-blocking)
-    logChatToSupabase(supabase, message, reply);
+    // 3. No LLM key → context-aware reply (always works)
+    const contextReply = buildContextReply(message.trim(), ctx);
+
+    // Queue for VPS processing anyway (VPS Kimi will process later)
+    const { data: task } = await supabase.from('anima_task_queue').insert({
+      agent_name: 'ROOT_ORCHESTRATOR',
+      task_type: 'CUSTOM',
+      task_payload: { type: 'CHAT', prompt: message.trim(), source: 'dashboard_chat' },
+      priority: 7,
+      status: 'QUEUED',
+      user_id: MASTER_UUID,
+    }).select('id').single();
 
     return res.status(200).json({
-      reply,
+      reply: contextReply,
       agent: 'ROOT_ORCHESTRATOR',
-      mode: process.env.OPENROUTER_API_KEY ? 'llm' : 'context_engine',
+      mode: 'context_engine',
+      taskId: task?.id,
+      hint: 'Add KIMI_API_KEY to Vercel env vars for full KimiClaw LLM responses.',
     });
 
   } catch (err) {
-    console.error('Chat API error:', err);
-    return res.status(500).json({ error: err.message || 'Internal error' });
+    console.error('Chat error:', err);
+    return res.status(500).json({ error: err.message });
   }
 }
