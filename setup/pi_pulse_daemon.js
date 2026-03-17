@@ -162,21 +162,16 @@ async function pulse() {
 
     entanglementSignalsToday = (signals || []).length;
 
-    // 7. Read quantum state from any recent logs
-    const { data: recentQuantum } = await supabase
-      .from('anima_agent_logs')
-      .select('quantum_phase, superposition_count, event_type')
-      .not('quantum_phase', 'is', null)
-      .order('pi_pulse_timestamp', { ascending: false })
-      .limit(1);
-
-    if (recentQuantum && recentQuantum.length > 0) {
-      quantumPhase = recentQuantum[0].quantum_phase || 'CLASSICAL';
-      activeSuperpositions = recentQuantum[0].superposition_count || 0;
+    // 7. Read quantum state from fractal_state quantum columns (if they exist)
+    // (quantum_phase, superposition_count, event_type columns removed from agent_logs)
+    const rootState = agents.find(a => a.branch_id === 'ROOT_ORCHESTRATOR');
+    if (rootState && rootState.quantum_phase) {
+      quantumPhase = rootState.quantum_phase || 'CLASSICAL';
     }
 
-    // 8. Write pulse event to anima_agent_logs
-    await supabase.from('anima_agent_logs').insert({
+    // 8. Write pulse event to anima_agent_logs (only valid schema columns)
+    const MASTER_UUID = '00000000-0000-0000-0000-000000000001';
+    const { error: logErr } = await supabase.from('anima_agent_logs').insert({
       agent_name: 'pi_pulse_daemon',
       fractal_depth: 0,
       phi_weight: 1.0,
@@ -187,13 +182,10 @@ async function pulse() {
       cost_usd: 0,
       cycle_number: cycleCounter,
       vitality_score: lastVitality,
-      event_type: 'HEARTBEAT',
-      quantum_phase: quantumPhase,
-      interference_applied: false,
-      superposition_count: activeSuperpositions,
       pi_pulse_timestamp: pulseTimestamp,
-      user_id: process.env.ANIMA_USER_ID || '00000000-0000-0000-0000-000000000000',
+      user_id: process.env.ANIMA_USER_ID || MASTER_UUID,
     });
+    if (logErr) console.warn(`[Pulse] Log write warning: ${logErr.message}`);
 
     // 9. Rewrite GENESIS.md
     await rewriteGenesis(pulseTimestamp, agents, vitalityScores);

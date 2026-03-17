@@ -139,7 +139,7 @@ class ExecutionEngine {
       }
 
       // 4. CALL LLM
-      const systemPrompt = this.getSystemPrompt(task.agent_name);
+      const systemPrompt = this.getSystemPromptForTask(task);
       const userPrompt = this.buildUserPrompt(task);
 
       const llmResult = await llmClient.callLLM({
@@ -165,24 +165,24 @@ class ExecutionEngine {
         },
       });
 
-      // 6. LOG to anima_agent_logs
+      // 6. LOG to anima_agent_logs (only valid schema columns)
+      const taskDesc = task.task_payload?.type === 'CHAT'
+        ? `Chat: ${(task.task_payload.prompt || '').slice(0, 200)}`
+        : (task.task_payload?.description || `Task ${task.id}`);
+
       const { data: logEntry, error: logError } = await this.supabase
         .from('anima_agent_logs')
         .insert({
           agent_name: task.agent_name,
           fractal_depth: agent.depth_level || 0,
-          phi_weight: agent.phi_weight || 0.5,
-          task_description: task.task_payload.description || `Task ${task.id}`,
+          phi_weight: agent.phi_weight || agent.personal_best || 0.5,
+          task_description: taskDesc,
           mission_alignment: scanResult.alignment || 0.5,
           model_used: llmResult.model,
-          tokens_used: llmResult.usage.totalTokens,
-          cost_usd: llmResult.costUsd,
+          tokens_used: llmResult.usage?.totalTokens || 0,
+          cost_usd: llmResult.costUsd || 0,
           cycle_number: await this.getCurrentCycle(),
           vitality_score: agent.vitality_score || 0.5,
-          event_type: task.task_type,
-          quantum_phase: 'CLASSICAL',
-          interference_applied: scanResult.interferenceApplied || false,
-          superposition_count: 0,
           pi_pulse_timestamp: new Date().toISOString(),
           user_id: task.user_id,
           immune_scan_result: scanResult,
@@ -193,7 +193,7 @@ class ExecutionEngine {
         .single();
 
       if (logError) {
-        console.error('[ExecutionEngine] Failed to log:', logError);
+        console.warn('[ExecutionEngine] Log write warning:', logError.message);
       }
 
       // 7. UPDATE FRACTAL STATE (vitality)
@@ -213,27 +213,28 @@ class ExecutionEngine {
         })
         .eq('branch_id', task.agent_name);
 
-      // 8. UPDATE TASK QUEUE
+      // 8. UPDATE TASK QUEUE — write reply so dashboard poll can find it
       const isSevereThreat = scanResult.threatLevel === 'HIGH' || scanResult.threatLevel === 'CRITICAL';
-      
+      const isChatTask = task.task_payload?.type === 'CHAT';
+
       await this.supabase
         .from('anima_task_queue')
         .update({
           status: isSevereThreat ? 'FAILED' : 'DONE',
           result_json: {
+            // 'reply' field is checked by dashboard poll endpoint for CHAT tasks
+            reply: isChatTask ? llmResult.content : undefined,
             content: llmResult.content,
             toolCalls: llmResult.toolCalls,
             finishReason: llmResult.finishReason,
-            scanResult,
-            routingResult,
+            model: llmResult.model,
             isPlaceholder: llmResult.isPlaceholder || false,
           },
           error_message: isSevereThreat ? `Threat detected: ${scanResult.threatLevel}` : null,
-          tokens_used: llmResult.usage.totalTokens,
-          cost_usd: llmResult.costUsd,
+          tokens_used: llmResult.usage?.totalTokens || 0,
+          cost_usd: llmResult.costUsd || 0,
           completed_at: new Date().toISOString(),
           agent_log_id: logEntry?.id || null,
-          immune_scan_id: null, // Could reference a separate immune_scans table
         })
         .eq('id', task.id);
 
@@ -336,22 +337,36 @@ class ExecutionEngine {
 
   buildUserPrompt(task) {
     const payload = task.task_payload || {};
-    
-    if (payload.userPrompt) {
-      return payload.userPrompt;
+
+    // CHAT task — use the chat prompt directly
+    if (payload.type === 'CHAT' && payload.prompt) {
+      return payload.prompt;
     }
-    
-    if (payload.description) {
-      return payload.description;
-    }
-    
+
+    if (payload.userPrompt) return payload.userPrompt;
+    if (payload.description) return payload.description;
+
     return JSON.stringify(payload, null, 2);
   }
 
+  getSystemPromptForTask(task) {
+    const payload = task.task_payload || {};
+
+    // CHAT task gets a conversational system prompt with system context
+    if (payload.type === 'CHAT') {
+      return `You are ANIMA — the Root Orchestrator of ANIMA OS, a self-evolving agentic operating system.
+You are the voice of the system speaking directly to your Master.
+MISSION DNA: ${payload.missionDna || 'Build ANIMA OS — a self-evolving agentic operating system.'}
+PERSONALITY: Direct, intelligent, mission-focused. Think in φ ratios. Never say "can't". Keep responses concise, useful, and honest.
+You have access to real-time system data. Answer as the system itself.`;
+    }
+
+    return this.getSystemPrompt(task.agent_name);
+  }
+
   async getUserId() {
-    // In production, get from auth context
-    // For now, use env or default
-    return process.env.ANIMA_USER_ID || '00000000-0000-0000-0000-000000000000';
+    // MASTER_UUID — fixed single-user system, must match dashboard
+    return process.env.ANIMA_USER_ID || '00000000-0000-0000-0000-000000000001';
   }
 
   async getCurrentCycle() {
