@@ -236,8 +236,8 @@ export function MessageBubble({ message, isHuman, isGrouped }: MessageBubbleProp
         }`}>
           {/* Attachment thumbnails */}
           {message.attachments && message.attachments.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {message.attachments.map((att, idx) => (
+            <div className="flex flex-wrap gap-2 mb-1.5">
+              {message.attachments.map((att, idx) =>
                 att.type.startsWith('image/') ? (
                   <Image
                     key={idx}
@@ -246,15 +246,36 @@ export function MessageBubble({ message, isHuman, isGrouped }: MessageBubbleProp
                     width={200}
                     height={160}
                     unoptimized
-                    className="max-w-[200px] max-h-[160px] rounded-md object-cover border border-border/30"
+                    className="max-w-[200px] max-h-[160px] rounded-lg object-cover border border-border/30 shadow-sm"
                   />
+                ) : att.type.startsWith('audio/') ? (
+                  <div key={idx} className="flex flex-col gap-1 rounded-lg border border-[#22D3EE]/25 bg-[#22D3EE]/5 px-3 py-2 min-w-[200px] max-w-[260px]">
+                    <div className="flex items-center gap-2 text-[#22D3EE] text-[11px] font-medium mb-0.5">
+                      <svg width="12" height="11" viewBox="0 0 16 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                        <path d="M1 7h1M3 4v6M5 2v10M7 5v4M9 3v8M11 5v4M13 4v6M15 7h1" />
+                      </svg>
+                      Voice message
+                    </div>
+                    {/* Native audio player — styled by browser but functional */}
+                    <audio
+                      src={att.dataUrl}
+                      controls
+                      className="w-full h-7 opacity-80 hover:opacity-100 transition-opacity"
+                      style={{ colorScheme: 'dark' }}
+                    />
+                  </div>
                 ) : (
-                  <div key={idx} className="flex items-center gap-1.5 bg-black/20 rounded-md px-2 py-1 text-xs text-muted-foreground">
-                    <span className="font-medium">{att.name}</span>
-                    <span className="text-[10px] text-muted-foreground/50">{att.size < 1024 ? `${att.size} B` : att.size < 1024 * 1024 ? `${(att.size / 1024).toFixed(1)} KB` : `${(att.size / (1024 * 1024)).toFixed(1)} MB`}</span>
+                  <div key={idx} className="flex items-center gap-2 bg-black/20 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground border border-border/30">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 1H4a1 1 0 00-1 1v12a1 1 0 001 1h8a1 1 0 001-1V6L9 1z" /><path d="M9 1v5h5" />
+                    </svg>
+                    <span className="font-medium truncate max-w-[120px]">{att.name}</span>
+                    <span className="text-[10px] text-muted-foreground/50 flex-shrink-0">
+                      {att.size < 1024 ? `${att.size} B` : att.size < 1024 * 1024 ? `${(att.size / 1024).toFixed(1)} KB` : `${(att.size / (1024 * 1024)).toFixed(1)} MB`}
+                    </span>
                   </div>
                 )
-              ))}
+              )}
             </div>
           )}
           {isCommand ? (
