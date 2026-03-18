@@ -82,6 +82,7 @@ const navGroups: NavGroup[] = [
     id: 'animaclaw',
     label: 'ANIMACLAW',
     items: [
+      { id: 'anima-vitals', label: 'Pi Vitals', icon: <AnimaVitalsIcon />, priority: false },
       { id: 'anima-agents', label: 'Anima Agents', icon: <AnimaAgentsIcon />, priority: false },
       { id: 'anima-workspaces', label: 'Workspaces', icon: <AnimaWorkspacesIcon />, priority: false },
       { id: 'anima-usage', label: 'Usage & Tiers', icon: <AnimaUsageIcon />, priority: false },
@@ -89,6 +90,15 @@ const navGroups: NavGroup[] = [
     ],
   },
 ]
+
+function AnimaVitalsIcon() {
+  return (
+    <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="10" cy="10" r="7" strokeOpacity="0.4" />
+      <path d="M3 10h2.5l2-4 2.5 8 2-6 1.5 3H17" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
 function AnimaAgentsIcon() {
   return (

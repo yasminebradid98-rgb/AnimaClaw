@@ -36,6 +36,7 @@ import { SecurityAuditPanel } from '@/components/panels/security-audit-panel'
 import { NodesPanel } from '@/components/panels/nodes-panel'
 import { ExecApprovalPanel } from '@/components/panels/exec-approval-panel'
 import { ChatPagePanel } from '@/components/panels/chat-page-panel'
+import { AnimaVitalsPanel } from '@/components/panels/anima-vitals-panel'
 import { AnimaAgentList } from '@/components/anima/AnimaAgentList'
 import { ClientWorkspace } from '@/components/anima/ClientWorkspace'
 import { UsageTierPanel } from '@/components/anima/UsageTierPanel'
@@ -576,6 +577,8 @@ function ContentRouter({ tab }: { tab: string }) {
       return <ExecApprovalPanel />
     case 'chat':
       return <ChatPagePanel />
+    case 'anima-vitals':
+      return <AnimaVitalsPanel />
     case 'anima-agents':
       return <AnimaAgentList />
     case 'anima-workspaces':
