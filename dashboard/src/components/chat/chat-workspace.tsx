@@ -461,7 +461,6 @@ function SessionConversationView({
 }) {
   const isGatewaySession = session.sessionKind === 'gateway'
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null)
-  const [continuePrompt, setContinuePrompt] = useState('')
   const [continueBusy, setContinueBusy] = useState(false)
   const [continueError, setContinueError] = useState<string | null>(null)
   const [lastReply, setLastReply] = useState<string | null>(null)
@@ -479,6 +478,7 @@ function SessionConversationView({
     setPrefError(null)
     setContinueError(null)
     setLastReply(null)
+    setContinueBusy(false)
   }, [session.prefKey, session.displayName, session.colorTag])
 
   useEffect(() => {
@@ -487,9 +487,10 @@ function SessionConversationView({
     container.scrollTop = container.scrollHeight
   }, [messages, loading, lastReply])
 
-  const handleContinueSession = async () => {
-    const prompt = continuePrompt.trim()
-    if (!prompt || continueBusy) return
+  const handleSend = async (content: string, attachments?: import('@/store').ChatAttachment[]) => {
+    const prompt = content.trim()
+    if (!prompt && !attachments?.length) return
+    if (continueBusy) return
 
     setContinueBusy(true)
     setContinueError(null)
@@ -507,6 +508,7 @@ function SessionConversationView({
             content: prompt,
             conversation_id: `agent_${agentName}`,
             message_type: 'text',
+            attachments,
             forward: true,
             sessionKey: session.sessionKey || undefined,
           }),
@@ -519,7 +521,6 @@ function SessionConversationView({
         if (fwd?.attempted && !fwd?.delivered) {
           setContinueError(`Message saved but not delivered: ${fwd.reason || 'unknown'}`)
         }
-        setContinuePrompt('')
         // Refresh transcript after a short delay to capture the response
         setTimeout(() => onRefreshTranscript(), 2000)
       } else {
@@ -536,7 +537,6 @@ function SessionConversationView({
         if (!res.ok) {
           throw new Error(data?.error || 'Failed to continue session')
         }
-        setContinuePrompt('')
         if (typeof data?.reply === 'string' && data.reply.trim()) {
           setLastReply(data.reply.trim())
         }
@@ -663,36 +663,22 @@ function SessionConversationView({
         )}
       </div>
 
-      {/* Continue session input */}
-      <div className="border-t border-border/50 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <span className={`font-mono-tight text-xs ${isGatewaySession ? 'text-cyan-400/60' : 'text-green-400/60'}`}>{isGatewaySession ? '>' : '$'}</span>
-          <input
-            value={continuePrompt}
-            onChange={(e) => setContinuePrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                void handleContinueSession()
-              }
-            }}
-            placeholder={isGatewaySession ? 'Send message to this agent session...' : 'Send prompt to this local session...'}
-            className="h-7 flex-1 rounded border border-border/40 bg-surface-1 px-2 font-mono-tight text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
-          />
-          <Button
-            onClick={handleContinueSession}
-            size="sm"
-            variant="ghost"
-            disabled={continueBusy || !continuePrompt.trim()}
-            className="h-7 px-3 text-xs"
-          >
-            {continueBusy ? '...' : 'Send'}
-          </Button>
-        </div>
-        {continueError && <div className="mt-1 text-xs text-red-400">{continueError}</div>}
+      {/* Continue session input — full ChatInput with Attach + Voice */}
+      <div className="flex-shrink-0">
+        <ChatInput
+          onSend={handleSend}
+          disabled={continueBusy}
+          isGenerating={continueBusy}
+          agents={[]}
+        />
+        {continueError && (
+          <div className="px-4 pb-2 -mt-1 text-xs text-red-400">{continueError}</div>
+        )}
         {lastReply && (
-          <div className="mt-2 border-l-2 border-primary/30 pl-3">
-            <div className="font-mono-tight text-xs leading-relaxed text-foreground whitespace-pre-wrap">{lastReply}</div>
+          <div className="px-4 pb-3 border-t border-border/50">
+            <div className="border-l-2 border-primary/30 pl-3">
+              <div className="font-mono-tight text-xs leading-relaxed text-foreground whitespace-pre-wrap">{lastReply}</div>
+            </div>
           </div>
         )}
       </div>

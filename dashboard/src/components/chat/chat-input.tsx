@@ -350,7 +350,7 @@ export function ChatInput({
             isFocused
               ? 'border-[#22D3EE]/50 shadow-[0_0_0_3px_hsl(187_82%_53%_/_0.10),0_4px_24px_rgba(0,0,0,0.3)]'
               : 'border-border/60 shadow-[0_2px_12px_rgba(0,0,0,0.2)]',
-            disabled ? 'opacity-50 pointer-events-none' : '',
+            disabled ? 'pointer-events-none' : '',
             isDragOver ? 'border-[#22D3EE]/60 bg-[#22D3EE]/5' : '',
           ].filter(Boolean).join(' ')}
         >
@@ -411,7 +411,7 @@ export function ChatInput({
                 className={[
                   'w-full resize-none bg-transparent text-foreground',
                   'placeholder:text-muted-foreground/35 focus:outline-none',
-                  'disabled:opacity-40 leading-relaxed',
+                  'disabled:opacity-50 leading-relaxed',
                   compact ? 'text-xs' : 'text-sm',
                 ].join(' ')}
                 style={{
@@ -574,7 +574,7 @@ function ActionButton({
       className={[
         'flex items-center gap-1.5 h-8 px-2.5 rounded-xl border border-transparent',
         'text-muted-foreground transition-all duration-150',
-        'disabled:opacity-30 disabled:cursor-not-allowed',
+        'disabled:opacity-40 disabled:cursor-not-allowed',
         hoverClass,
       ].join(' ')}
     >
