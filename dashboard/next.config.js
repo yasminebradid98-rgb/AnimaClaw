@@ -2,7 +2,23 @@ const withNextIntl = require('next-intl/plugin')('./src/i18n/request.ts')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  // 'standalone' for VPS/Docker, omit on Vercel (Vercel manages its own output)
+  ...(process.env.VERCEL ? {} : { output: 'standalone' }),
+
+  // On Vercel: proxy all /api/* to VPS brain via Cloudflare Tunnel
+  ...(process.env.VERCEL && process.env.VPS_API_URL ? {
+    async rewrites() {
+      return [
+        {
+          source: '/api/:path*',
+          destination: `${process.env.VPS_API_URL}/api/:path*`,
+        },
+      ]
+    },
+  } : {}),
+
+  // Don't bundle native modules — let Node.js require them at runtime
+  serverExternalPackages: ['better-sqlite3'],
   outputFileTracingExcludes: {
     '/*': [
       './.data/**/*',
