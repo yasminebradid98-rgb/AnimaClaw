@@ -6,14 +6,18 @@ const nextConfig = {
   ...(process.env.VERCEL ? {} : { output: 'standalone' }),
 
   // On Vercel: proxy all /api/* to VPS brain via Cloudflare Tunnel
+  // Uses `beforeFiles` so the rewrite fires BEFORE Next.js route matching,
+  // overriding the local API route files (which need SQLite — unavailable on Vercel).
   ...(process.env.VERCEL && process.env.VPS_API_URL ? {
     async rewrites() {
-      return [
-        {
-          source: '/api/:path*',
-          destination: `${process.env.VPS_API_URL}/api/:path*`,
-        },
-      ]
+      return {
+        beforeFiles: [
+          {
+            source: '/api/:path*',
+            destination: `${process.env.VPS_API_URL}/api/:path*`,
+          },
+        ],
+      }
     },
   } : {}),
 
