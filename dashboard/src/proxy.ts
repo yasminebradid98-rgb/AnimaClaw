@@ -165,7 +165,13 @@ export function proxy(request: NextRequest) {
       const requestHost = request.headers.get('host')?.split(',')[0]?.trim()
         || request.nextUrl.host
         || ''
-      if (originHost && requestHost && originHost !== requestHost) {
+      // MC_ALLOWED_ORIGINS: comma-separated list of trusted proxy/frontend origins
+      const extraAllowedOrigins = String(process.env.MC_ALLOWED_ORIGINS || '')
+        .split(',').map((s) => s.trim()).filter(Boolean)
+      const originAllowed = !originHost || !requestHost
+        || originHost === requestHost
+        || extraAllowedOrigins.includes(originHost)
+      if (!originAllowed) {
         return addSecurityHeaders(NextResponse.json({ error: 'CSRF origin mismatch' }, { status: 403 }), request)
       }
     }
