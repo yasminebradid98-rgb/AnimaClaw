@@ -31,6 +31,10 @@ const defaultOpenClawStateDir = path.join(os.homedir(), '.openclaw')
 const explicitOpenClawConfigPath =
   process.env.OPENCLAW_CONFIG_PATH ||
   process.env.MISSION_CONTROL_OPENCLAW_CONFIG_PATH ||
+  // ANIMA_OS_CONFIG_PATH: points to the project-level openclaw.json
+  // (e.g. /root/AnimaClaw/openclaw.json on the VPS) which holds the
+  // real Anima OS agent definitions (NEXUS, FORGE, AEGIS, AKASHA, MORPHEUS, ARGUS)
+  process.env.ANIMA_OS_CONFIG_PATH ||
   ''
 const legacyOpenClawHome =
   process.env.OPENCLAW_HOME ||

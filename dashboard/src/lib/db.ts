@@ -204,33 +204,39 @@ function seedDefaultAgents(dbConn: Database.Database): void {
     VALUES (?, ?, ?, 'offline', 'seed', ?, ?, ?)
   `)
 
+  const projectRoot = pathResolve(configPath, '..')
+
   dbConn.transaction(() => {
     for (const agent of agents) {
-      const name: string = agent.name
-      if (!name) continue
+      // Support both {name, id} (new format) and legacy {name} only
+      const displayName: string = agent.name       // e.g. "NEXUS"
+      const techId: string      = agent.id || agent.name  // e.g. "ROOT_ORCHESTRATOR"
+      if (!displayName) continue
 
-      // Map openclaw agent fields to dashboard DB columns
-      const role: string = agent.description || agent.name.toLowerCase().replace(/_/g, '-')
+      const role: string = agent.tagline || agent.description || displayName.toLowerCase()
 
-      // Try to load soul_content from the agent's .md file
+      // Load soul content from the agent's .md file
       let soulContent: string | null = null
       if (agent.file) {
-        const agentFilePath = pathJoin(pathResolve(configPath, '..'), agent.file)
+        const agentFilePath = pathJoin(projectRoot, agent.file)
         if (existsSync(agentFilePath)) {
           try { soulContent = readFileSync(agentFilePath, 'utf8') } catch {}
         }
       }
 
       const cfg = JSON.stringify({
-        phi_weight: agent.phi_weight ?? null,
-        depth: agent.depth ?? null,
-        parent: agent.parent ?? null,
-        cycle: agent.cycle ?? null,
-        tools: agent.tools ?? [],
+        id:          techId,
+        phi_weight:  agent.phi_weight  ?? null,
+        depth:       agent.depth       ?? null,
+        parent:      agent.parent      ?? null,
+        cycle:       agent.cycle       ?? null,
+        tools:       agent.tools       ?? [],
+        emoji:       agent.emoji       ?? null,
+        tagline:     agent.tagline     ?? agent.description ?? '',
         description: agent.description ?? '',
       })
 
-      insert.run(name, role, soulContent, now, now, cfg)
+      insert.run(displayName, role, soulContent, now, now, cfg)
     }
   })()
 

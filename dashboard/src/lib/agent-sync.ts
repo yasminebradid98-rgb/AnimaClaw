@@ -193,7 +193,13 @@ async function readOpenClawAgents(): Promise<OpenClawAgent[]> {
   const { readFile } = require('fs/promises')
   const raw = await readFile(configPath, 'utf-8')
   const parsed = parseJsonRelaxed<any>(raw)
-  return parsed?.agents?.list || []
+  // Support both formats:
+  //   { agents: [...] }         — project openclaw.json (direct array)
+  //   { agents: { list: [...] } } — OpenClaw gateway config format
+  const agentsField = parsed?.agents
+  if (Array.isArray(agentsField)) return agentsField
+  if (agentsField && Array.isArray(agentsField.list)) return agentsField.list
+  return []
 }
 
 /** Extract MC-friendly fields from an OpenClaw agent config */
@@ -203,23 +209,34 @@ function mapAgentToMC(agent: OpenClawAgent): {
   config: any
   soul_content: string | null
 } {
-  const name = agent.identity?.name || agent.name || agent.id
-  const role = agent.identity?.theme || 'agent'
-  // Store the full config minus systemPrompt/soul (which can be large)
+  // Display name: prefer identity.name, then agent.name (e.g. "NEXUS"), then agent.id
+  const name = agent.identity?.name || (agent as any).name || agent.id
+
+  // Role: use tagline or description for project-format agents, fallback to theme
+  const role = (agent as any).tagline || (agent as any).description || agent.identity?.theme || 'agent'
+
   const configData = enrichAgentConfigFromWorkspace({
-    openclawId: agent.id,
-    model: agent.model,
-    identity: agent.identity,
-    sandbox: agent.sandbox,
-    tools: agent.tools,
-    subagents: agent.subagents,
+    openclawId:  agent.id || (agent as any).name,
+    techId:      agent.id,
+    displayName: (agent as any).name,
+    emoji:       (agent as any).emoji,
+    phi_weight:  (agent as any).phi_weight,
+    depth:       (agent as any).depth,
+    parent:      (agent as any).parent,
+    cycle:       (agent as any).cycle,
+    tools:       agent.tools,
+    model:       agent.model,
+    identity:    agent.identity,
+    sandbox:     agent.sandbox,
+    subagents:   agent.subagents,
     memorySearch: agent.memorySearch,
-    workspace: agent.workspace,
-    agentDir: agent.agentDir,
-    isDefault: agent.default || false,
+    workspace:   agent.workspace,
+    agentDir:    agent.agentDir,
+    isDefault:   agent.default || false,
   })
 
-  // Read soul.md from the agent's workspace if available
+  // Read soul.md from workspace if available; otherwise no soul_content here
+  // (the startup seeder in db.ts reads the .md file using the "file" path)
   const soul_content = readWorkspaceFile(agent.workspace, 'soul.md')
 
   return { name, role, config: configData, soul_content }
