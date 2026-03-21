@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     const insert = db.prepare(`
       INSERT INTO agents (name, role, soul_content, status, source, created_at, updated_at, config, workspace_id)
-      VALUES (?, ?, ?, 'offline', 'seed', ?, ?, ?, ?)
+      VALUES (?, ?, ?, 'idle', 'seed', ?, ?, ?, ?)
     `)
 
     let seeded = 0
@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
         })
 
         insert.run(displayName, role, soulContent, now, now, cfg, workspaceId)
+
         seeded++
       }
     })()

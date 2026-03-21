@@ -201,7 +201,7 @@ function seedDefaultAgents(dbConn: Database.Database): void {
   const now = Math.floor(Date.now() / 1000)
   const insert = dbConn.prepare(`
     INSERT OR IGNORE INTO agents (name, role, soul_content, status, source, created_at, updated_at, config)
-    VALUES (?, ?, ?, 'offline', 'seed', ?, ?, ?)
+    VALUES (?, ?, ?, 'idle', 'seed', ?, ?, ?)
   `)
 
   const projectRoot = pathResolve(configPath, '..')

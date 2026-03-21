@@ -239,42 +239,86 @@ function extractToolEvents(waitPayload: any): ToolEvent[] {
 }
 
 /**
- * Call Claude/OpenRouter directly when the gateway is offline.
- * Uses ANTHROPIC_API_KEY (preferred) or OPENROUTER_API_KEY as fallback.
+ * Resolve which AI provider + model + key to use.
+ * Priority: agent-level config → system env vars → auto-detect from available keys.
+ *
+ * Supported providers:
+ *   openai      → OPENAI_API_KEY      (ChatGPT / GPT-4o / Codex)
+ *   openrouter  → OPENROUTER_API_KEY  (any model via OpenRouter)
+ *   anthropic   → ANTHROPIC_API_KEY   (Claude)
+ *
+ * System env vars:
+ *   ANIMA_AI_PROVIDER  = openai | openrouter | anthropic
+ *   ANIMA_AI_MODEL     = model name (e.g. gpt-4o-mini, openai/gpt-4o, claude-sonnet-4-6)
+ *   OPENROUTER_MODEL   = model name on OpenRouter (overrides ANIMA_AI_MODEL for openrouter)
  */
-async function callDirectAI(agentName: string, soulContent: string | null, agentRole: string | null, userMessage: string): Promise<string | null> {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY
-  const openrouterKey = process.env.OPENROUTER_API_KEY
-  const apiKey = anthropicKey || openrouterKey
-  if (!apiKey) return null
+function resolveAIConfig(agentConfig: Record<string, any> | null): {
+  provider: 'openai' | 'openrouter' | 'anthropic' | null
+  model: string
+  apiKey: string
+} | null {
+  // Per-agent overrides from config JSON
+  const agentProvider = agentConfig?.ai_provider as string | undefined
+  const agentModel    = agentConfig?.ai_model    as string | undefined
 
-  const isOpenRouter = !anthropicKey && !!openrouterKey
+  const envProvider = process.env.ANIMA_AI_PROVIDER || ''
+  const envModel    = process.env.ANIMA_AI_MODEL    || ''
+
+  const openaiKey     = process.env.OPENAI_API_KEY     || ''
+  const openrouterKey = process.env.OPENROUTER_API_KEY || ''
+  const anthropicKey  = process.env.ANTHROPIC_API_KEY  || ''
+
+  // Determine provider (agent > system env > auto-detect)
+  const provider = (agentProvider || envProvider || '').toLowerCase()
+
+  if (provider === 'openai' || (!provider && openaiKey)) {
+    if (!openaiKey) return null
+    const model = agentModel || envModel || 'gpt-4o-mini'
+    return { provider: 'openai', model, apiKey: openaiKey }
+  }
+
+  if (provider === 'openrouter' || (!provider && openrouterKey)) {
+    if (!openrouterKey) return null
+    const model = agentModel || process.env.OPENROUTER_MODEL || envModel || 'openai/gpt-4o-mini'
+    return { provider: 'openrouter', model, apiKey: openrouterKey }
+  }
+
+  if (provider === 'anthropic' || (!provider && anthropicKey)) {
+    if (!anthropicKey) return null
+    const model = agentModel || envModel || 'claude-haiku-4-5-20251001'
+    return { provider: 'anthropic', model, apiKey: anthropicKey }
+  }
+
+  return null
+}
+
+/**
+ * Call the configured AI provider directly (no gateway required).
+ * Supports OpenAI, OpenRouter, and Anthropic.
+ * Per-agent model/provider can be set in the agent's config JSON.
+ */
+async function callDirectAI(
+  agentName: string,
+  soulContent: string | null,
+  agentRole: string | null,
+  userMessage: string,
+  agentConfigJson: string | null = null
+): Promise<string | null> {
+  let agentConfig: Record<string, any> | null = null
+  if (agentConfigJson) {
+    try { agentConfig = JSON.parse(agentConfigJson) } catch {}
+  }
+
+  const resolved = resolveAIConfig(agentConfig)
+  if (!resolved) return null
+
+  const { provider, model, apiKey } = resolved
+
   const systemPrompt = soulContent?.trim() ||
     `You are ${agentName}, an AI agent in Anima OS. ${agentRole ? `Your role: ${agentRole}.` : ''} Be concise, direct, and helpful.`
 
   try {
-    if (isOpenRouter) {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': 'https://animaos.ketami.net',
-          'X-Title': 'Anima OS',
-        },
-        body: JSON.stringify({
-          model: 'anthropic/claude-3-5-haiku',
-          max_tokens: 1024,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage },
-          ],
-        }),
-      })
-      if (!res.ok) return null
-      const data = await res.json()
-      return typeof data?.choices?.[0]?.message?.content === 'string' ? data.choices[0].message.content.trim() : null
-    } else {
+    if (provider === 'anthropic') {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -283,17 +327,56 @@ async function callDirectAI(agentName: string, soulContent: string | null, agent
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model,
           max_tokens: 1024,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         }),
       })
-      if (!res.ok) return null
+      if (!res.ok) {
+        logger.warn({ model, status: res.status }, 'Anthropic direct AI call failed')
+        return null
+      }
       const data = await res.json()
       return typeof data?.content?.[0]?.text === 'string' ? data.content[0].text.trim() : null
+
+    } else {
+      // OpenAI-compatible endpoint (both openai and openrouter use the same format)
+      const url = provider === 'openrouter'
+        ? 'https://openrouter.ai/api/v1/chat/completions'
+        : 'https://api.openai.com/v1/chat/completions'
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      }
+      if (provider === 'openrouter') {
+        headers['HTTP-Referer'] = 'https://animaos.ketami.net'
+        headers['X-Title'] = 'Anima OS'
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model,
+          max_tokens: 1024,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+        }),
+      })
+      if (!res.ok) {
+        logger.warn({ provider, model, status: res.status }, 'Direct AI call failed')
+        return null
+      }
+      const data = await res.json()
+      const text = data?.choices?.[0]?.message?.content
+      return typeof text === 'string' ? text.trim() : null
     }
-  } catch {
+  } catch (err) {
+    logger.error({ err, provider, model }, 'callDirectAI exception')
     return null
   }
 }
@@ -533,14 +616,15 @@ export async function POST(request: NextRequest) {
           if (to) {
             try {
               const agentRow = db
-                .prepare('SELECT name, role, soul_content FROM agents WHERE lower(name) = lower(?) AND workspace_id = ?')
-                .get(to, workspaceId) as { name: string; role: string; soul_content?: string } | undefined
+                .prepare('SELECT name, role, soul_content, config FROM agents WHERE lower(name) = lower(?) AND workspace_id = ?')
+                .get(to, workspaceId) as { name: string; role: string; soul_content?: string; config?: string } | undefined
 
               const aiReply = await callDirectAI(
                 agentRow?.name || to,
                 agentRow?.soul_content || null,
                 agentRow?.role || null,
-                content
+                content,
+                agentRow?.config || null
               )
 
               if (aiReply) {
