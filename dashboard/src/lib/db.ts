@@ -51,6 +51,7 @@ function initializeSchema() {
   try {
     runMigrations(db);
     seedAdminUserFromEnv(db);
+    seedDefaultAgents(db);
 
     // Initialize webhook event listener (once)
     if (!webhookListenerInitialized) {
@@ -156,6 +157,94 @@ function seedAdminUserFromEnv(dbConn: Database.Database): void {
   `).run(username, displayName, hashPassword(password), 'admin')
 
   logger.info(`Seeded admin user: ${username}`)
+}
+
+/** Default Anima OS agents seeded on first run */
+const ANIMA_DEFAULT_AGENTS = [
+  {
+    name: 'Claude',
+    role: 'reasoning',
+    config: JSON.stringify({
+      provider: 'anthropic',
+      category: 'reasoning',
+      identity: { emoji: '🧠', theme: 'cyan', description: 'Anthropic reasoning agent' },
+    }),
+  },
+  {
+    name: 'Kimi',
+    role: 'speed',
+    config: JSON.stringify({
+      provider: 'moonshot',
+      category: 'speed',
+      identity: { emoji: '⚡', theme: 'violet', description: 'Moonshot speed agent via kimi-claw' },
+    }),
+  },
+  {
+    name: 'DeepSeek',
+    role: 'speed',
+    config: JSON.stringify({
+      provider: 'deepseek',
+      category: 'speed',
+      identity: { emoji: '🔍', theme: 'blue', description: 'DeepSeek speed agent' },
+    }),
+  },
+  {
+    name: 'Gemini',
+    role: 'reasoning',
+    config: JSON.stringify({
+      provider: 'google',
+      category: 'reasoning',
+      identity: { emoji: '💎', theme: 'emerald', description: 'Google Gemini reasoning agent' },
+    }),
+  },
+  {
+    name: 'OpenClaw',
+    role: 'orchestrator',
+    config: JSON.stringify({
+      provider: 'openclaw',
+      category: 'orchestration',
+      identity: { emoji: '🦀', theme: 'orange', description: 'OpenClaw gateway orchestrator' },
+    }),
+  },
+  {
+    name: 'Hermes',
+    role: 'automation',
+    config: JSON.stringify({
+      provider: 'hermes',
+      category: 'automation',
+      identity: { emoji: '🪽', theme: 'amber', description: 'Hermes webhook automation agent' },
+    }),
+  },
+  {
+    name: 'Codex',
+    role: 'developer',
+    config: JSON.stringify({
+      provider: 'openai',
+      category: 'code',
+      identity: { emoji: '💻', theme: 'indigo', description: 'OpenAI Codex code agent' },
+    }),
+  },
+]
+
+function seedDefaultAgents(dbConn: Database.Database): void {
+  if (process.env.NEXT_PHASE === 'phase-production-build') return
+
+  const count = (dbConn.prepare('SELECT COUNT(*) as count FROM agents').get() as CountRow).count
+  if (count > 0) return  // Agents already exist — don't overwrite user data
+
+  const now = Math.floor(Date.now() / 1000)
+  const insert = dbConn.prepare(`
+    INSERT OR IGNORE INTO agents (name, role, soul_content, status, source, created_at, updated_at, config)
+    VALUES (?, ?, NULL, 'offline', 'seed', ?, ?, ?)
+  `)
+
+  dbConn.transaction(() => {
+    for (const agent of ANIMA_DEFAULT_AGENTS) {
+      insert.run(agent.name, agent.role, now, now, agent.config)
+    }
+  })()
+
+  logger.info(`Seeded ${ANIMA_DEFAULT_AGENTS.length} default Anima OS agents`)
 }
 
 /**
