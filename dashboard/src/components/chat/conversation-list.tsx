@@ -245,16 +245,17 @@ export function ConversationList({ onNewConversation: _onNewConversation }: Conv
 
   const loadConversations = useCallback(async () => {
     try {
-      const sessionsUrl = '/api/sessions'
-      const requests: Promise<Response>[] = [
-        fetch(sessionsUrl),
+      const [sessionsRes, prefsRes, dbConvsRes] = await Promise.all([
+        fetch('/api/sessions'),
         fetch('/api/chat/session-prefs'),
-      ]
+        fetch('/api/chat/conversations?limit=50'),
+      ])
 
-      const [sessionsRes, prefsRes] = await Promise.all(requests)
       const sessionsData = sessionsRes.ok ? readSessions(await sessionsRes.json()) : []
       const prefs = prefsRes.ok ? readSessionPrefs(await prefsRes.json().catch(() => null)) : {}
+      const dbConvsData = dbConvsRes.ok ? await dbConvsRes.json().catch(() => null) : null
 
+      // Map gateway/local CLI sessions
       const providerSessions = sessionsData
         .map((s, idx: number) => {
           const lastActivityMs = Number(s.lastActivity || s.startTime || 0)
@@ -313,8 +314,47 @@ export function ConversationList({ onNewConversation: _onNewConversation }: Conv
           }
         })
 
+      // Map DB-based agent conversations
+      const dbConversations: Conversation[] = []
+      if (Array.isArray(dbConvsData?.conversations)) {
+        for (const conv of dbConvsData.conversations) {
+          const convId: string = conv.conversation_id || ''
+          if (!convId) continue
+          // Derive a display name: "agent_NEXUS" → "NEXUS", "conv_123" → "Chat"
+          const agentName = convId.startsWith('agent_')
+            ? convId.replace('agent_', '')
+            : convId.startsWith('coord:')
+              ? convId.replace('coord:', '') + ' (coord)'
+              : convId
+          const lastMsg = conv.last_message
+          dbConversations.push({
+            id: convId,
+            name: agentName,
+            source: 'chat' as any,
+            participants: [],
+            lastMessage: lastMsg
+              ? {
+                  id: lastMsg.id,
+                  conversation_id: convId,
+                  from_agent: lastMsg.from_agent || 'system',
+                  to_agent: lastMsg.to_agent || null,
+                  content: lastMsg.content || '',
+                  message_type: (lastMsg.message_type as any) || 'text',
+                  created_at: lastMsg.created_at || 0,
+                }
+              : undefined,
+            unreadCount: conv.unread_count || 0,
+            updatedAt: conv.last_message_at || 0,
+          })
+        }
+      }
+
+      // Merge: DB conversations first (agent chats), then provider sessions
+      const sessionIds = new Set(providerSessions.map(s => s.id))
+      const uniqueDbConvs = dbConversations.filter(c => !sessionIds.has(c.id))
+
       setConversations(
-        providerSessions.sort((a: Conversation, b: Conversation) => b.updatedAt - a.updatedAt)
+        [...uniqueDbConvs, ...providerSessions].sort((a: Conversation, b: Conversation) => b.updatedAt - a.updatedAt)
       )
     } catch (err) {
       log.error('Failed to load conversations:', err)
@@ -339,6 +379,7 @@ export function ConversationList({ onNewConversation: _onNewConversation }: Conv
     )
   })
 
+  const agentChatRows = filteredConversations.filter((c) => (c.source as string) === 'chat')
   const gatewayRows = filteredConversations.filter((c) => c.source === 'session' && c.session?.sessionKind === 'gateway')
   const activeGatewayRows = gatewayRows.filter((c) => c.session?.active)
   const inactiveGatewayRows = gatewayRows.filter((c) => !c.session?.active)
@@ -349,6 +390,7 @@ export function ConversationList({ onNewConversation: _onNewConversation }: Conv
   function renderConversationItem(conv: Conversation) {
     const displayName = conv.name || conv.id.replace('agent_', '')
     const isSessionRow = conv.id.startsWith('session:')
+    const isChatRow = (conv.source as string) === 'chat'
     const isSelected = activeConversation === conv.id
     const isEditing = editingId === conv.id
 
@@ -368,14 +410,23 @@ export function ConversationList({ onNewConversation: _onNewConversation }: Conv
         <div className="flex items-center gap-2 w-full">
           {/* Mini avatar */}
           <div className="relative flex-shrink-0">
-            <SessionKindAvatar
-              kind={conv.session?.sessionKind || 'gateway'}
-              fallback={displayName.charAt(0).toUpperCase()}
-            />
+            {isChatRow ? (
+              <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+            ) : (
+              <SessionKindAvatar
+                kind={conv.session?.sessionKind || 'gateway'}
+                fallback={displayName.charAt(0).toUpperCase()}
+              />
+            )}
             {isSessionRow && conv.session?.active && (
               <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card ${STATUS_COLORS.busy}`} />
             )}
-            {!isSessionRow && (
+            {isChatRow && (
+              <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card ${STATUS_COLORS.idle}`} />
+            )}
+            {!isSessionRow && !isChatRow && (
               <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card ${STATUS_COLORS.offline}`} />
             )}
           </div>
@@ -459,10 +510,20 @@ export function ConversationList({ onNewConversation: _onNewConversation }: Conv
       <div className="flex-1 overflow-y-auto">
         {filteredConversations.length === 0 ? (
           <div className="p-4 text-center text-xs text-muted-foreground/50">
-            No conversations yet
+            No conversations yet.<br />
+            <span className="text-muted-foreground/30">Click an agent to start chatting.</span>
           </div>
         ) : (
           <>
+            {agentChatRows.length > 0 && (
+              <div>
+                <div className="px-3 pt-2 py-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-primary/60">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary/60" />
+                  Agent Chats
+                </div>
+                {agentChatRows.map(renderConversationItem)}
+              </div>
+            )}
             {activeGatewayRows.length > 0 && (
               <div>
                 <div className="px-3 pt-2 py-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-green-400/70">

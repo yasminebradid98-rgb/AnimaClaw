@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Dashboard (Next.js dev)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev"],
+      "cwd": "dashboard",
+      "port": 3000
+    },
+    {
+      "name": "AnimaOS Daemon",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["setup/pi_pulse_daemon.js", "start"],
+      "port": 443
+    },
+    {
+      "name": "AnimaOS CLI",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["runtime/cli.js"],
+      "port": null
+    }
+  ]
+}

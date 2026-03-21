@@ -239,6 +239,66 @@ function extractToolEvents(waitPayload: any): ToolEvent[] {
 }
 
 /**
+ * Call Claude/OpenRouter directly when the gateway is offline.
+ * Uses ANTHROPIC_API_KEY (preferred) or OPENROUTER_API_KEY as fallback.
+ */
+async function callDirectAI(agentName: string, soulContent: string | null, agentRole: string | null, userMessage: string): Promise<string | null> {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY
+  const openrouterKey = process.env.OPENROUTER_API_KEY
+  const apiKey = anthropicKey || openrouterKey
+  if (!apiKey) return null
+
+  const isOpenRouter = !anthropicKey && !!openrouterKey
+  const systemPrompt = soulContent?.trim() ||
+    `You are ${agentName}, an AI agent in Anima OS. ${agentRole ? `Your role: ${agentRole}.` : ''} Be concise, direct, and helpful.`
+
+  try {
+    if (isOpenRouter) {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://animaos.ketami.net',
+          'X-Title': 'Anima OS',
+        },
+        body: JSON.stringify({
+          model: 'anthropic/claude-3-5-haiku',
+          max_tokens: 1024,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+        }),
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      return typeof data?.choices?.[0]?.message?.content === 'string' ? data.choices[0].message.content.trim() : null
+    } else {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
+        }),
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      return typeof data?.content?.[0]?.text === 'string' ? data.content[0].text.trim() : null
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
  * GET /api/chat/messages - List messages with filters
  * Query params: conversation_id, from_agent, to_agent, limit, offset, since
  */
@@ -469,19 +529,50 @@ export async function POST(request: NextRequest) {
         if (!sessionKey && !openclawAgentId) {
           forwardInfo.reason = 'no_active_session'
 
-          // For coordinator messages, emit an immediate visible status reply
-          if (typeof conversation_id === 'string' && conversation_id.startsWith('coord:')) {
+          // Attempt a direct AI response when no gateway session is available
+          if (to) {
             try {
+              const agentRow = db
+                .prepare('SELECT name, role, soul_content FROM agents WHERE lower(name) = lower(?) AND workspace_id = ?')
+                .get(to, workspaceId) as { name: string; role: string; soul_content?: string } | undefined
+
+              const aiReply = await callDirectAI(
+                agentRow?.name || to,
+                agentRow?.soul_content || null,
+                agentRow?.role || null,
+                content
+              )
+
+              if (aiReply) {
+                createChatReply(db, workspaceId, conversation_id, to, from, aiReply, 'text', { source: 'direct_ai' })
+                forwardInfo.delivered = true
+                forwardInfo.reason = undefined
+              } else if (typeof conversation_id === 'string' && conversation_id.startsWith('coord:')) {
                 createChatReply(
-                  db,
-                  workspaceId,
-                  conversation_id,
-                  COORDINATOR_AGENT,
-                  from,
+                  db, workspaceId, conversation_id, COORDINATOR_AGENT, from,
                   'I received your message, but my live coordinator session is offline right now. Start/restore the coordinator session and retry.',
-                  'status',
-                  { status: 'offline', reason: 'no_active_session' }
+                  'status', { status: 'offline', reason: 'no_active_session' }
                 )
+              }
+            } catch (e) {
+              logger.error({ err: e }, 'Failed to generate direct AI reply')
+              if (typeof conversation_id === 'string' && conversation_id.startsWith('coord:')) {
+                try {
+                  createChatReply(
+                    db, workspaceId, conversation_id, COORDINATOR_AGENT, from,
+                    'I received your message, but my live coordinator session is offline right now. Start/restore the coordinator session and retry.',
+                    'status', { status: 'offline', reason: 'no_active_session' }
+                  )
+                } catch {}
+              }
+            }
+          } else if (typeof conversation_id === 'string' && conversation_id.startsWith('coord:')) {
+            try {
+              createChatReply(
+                db, workspaceId, conversation_id, COORDINATOR_AGENT, from,
+                'I received your message, but my live coordinator session is offline right now. Start/restore the coordinator session and retry.',
+                'status', { status: 'offline', reason: 'no_active_session' }
+              )
             } catch (e) {
               logger.error({ err: e }, 'Failed to create offline status reply')
             }
