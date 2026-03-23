@@ -1216,7 +1216,7 @@ export function OfficePanel() {
       pushOfficeEvent({
         kind: 'room',
         severity: mood,
-        message: `${sample.zoneLabel}: ${sample.agent.name} status is ${statusLabel[sample.agent.status].toLowerCase()}.`,
+        message: `${sample.zoneLabel}: ${sample.agent.name} status is ${(statusLabel[sample.agent.status] ?? sample.agent.status ?? 'unknown').toLowerCase()}.`,
       })
     }, 22000)
     return () => clearInterval(interval)
@@ -2196,8 +2196,8 @@ export function OfficePanel() {
                     <div>
                       <div className="text-sm font-medium text-foreground">{agent.name}</div>
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <span className={`w-1.5 h-1.5 rounded-full ${statusDot[agent.status]}`} />
-                        {agent.status === 'idle' ? t('legendStandby') : agent.status === 'busy' ? t('legendActive') : statusLabel[agent.status]}
+                        <span className={`w-1.5 h-1.5 rounded-full ${statusDot[agent.status] ?? 'bg-muted-foreground/40'}`} />
+                        {agent.status === 'idle' ? t('legendStandby') : agent.status === 'busy' ? t('legendActive') : (statusLabel[agent.status] ?? agent.status ?? 'Unknown')}
                       </div>
                     </div>
                   </div>
