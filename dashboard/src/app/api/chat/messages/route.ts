@@ -261,9 +261,10 @@ function resolveChatGPTSubscriptionKey(): string | null {
     if (!existsSync(authPath)) continue
     try {
       const data = JSON.parse(readFileSync(authPath, 'utf-8'))
-      // Codex CLI stores auth_mode="chatgpt" + access_token when logged in via ChatGPT
-      const authMode = typeof data.auth_mode === 'string' ? data.auth_mode : ''
+      // Codex CLI stores auth_mode="chatgpt" + tokens.access_token (nested) when logged in via ChatGPT
+      // Older format: top-level access_token
       const token =
+        typeof data.tokens?.access_token === 'string' ? data.tokens.access_token :
         typeof data.access_token === 'string' ? data.access_token :
         typeof data.token === 'string' ? data.token :
         typeof data.api_key === 'string' ? data.api_key : null
