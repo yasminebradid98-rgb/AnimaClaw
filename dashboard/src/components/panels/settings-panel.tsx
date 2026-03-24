@@ -62,7 +62,7 @@ function parseCoordinatorTargetAgents(rawAgents: any[]): CoordinatorTargetAgent[
 
   const unique = new Map<string, CoordinatorTargetAgent>()
   for (const agent of out) {
-    const key = agent.openclawId || agent.name.toLowerCase()
+    const key = agent.openclawId || (agent.name || '').toLowerCase()
     if (!unique.has(key)) unique.set(key, agent)
   }
 

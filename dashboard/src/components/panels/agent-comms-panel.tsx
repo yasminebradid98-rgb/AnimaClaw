@@ -48,10 +48,11 @@ const AGENT_IDENTITY: Record<string, { color: string; emoji: string; label: stri
 }
 
 function getIdentity(name: string) {
-  return AGENT_IDENTITY[name.toLowerCase()] || {
+  const safeName = name || ''
+  return AGENT_IDENTITY[safeName.toLowerCase()] || {
     color: '#9ca3af',
-    emoji: name.charAt(0).toUpperCase(),
-    label: name.charAt(0).toUpperCase() + name.slice(1),
+    emoji: safeName.charAt(0).toUpperCase() || '?',
+    label: safeName.charAt(0).toUpperCase() + safeName.slice(1) || 'Unknown',
   }
 }
 
