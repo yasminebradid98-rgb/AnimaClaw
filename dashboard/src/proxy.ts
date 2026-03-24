@@ -197,7 +197,16 @@ export function proxy(request: NextRequest) {
     // allowed to pass through proxy auth gate.
     const looksLikeAgentApiKey = /^mca_[a-f0-9]{48}$/i.test(apiKey)
 
-    if (sessionToken || hasValidApiKey || looksLikeAgentApiKey) {
+    // ANIMA_CHAT_KEY: clé dédiée à /api/anima-chat (widgets, curl, démo)
+    const animaChatKey = (process.env.ANIMA_CHAT_KEY || '').trim()
+    const hasAnimaChatKey = Boolean(
+      pathname === '/api/anima-chat' &&
+      animaChatKey &&
+      apiKey &&
+      safeCompare(apiKey, animaChatKey)
+    )
+
+    if (sessionToken || hasValidApiKey || looksLikeAgentApiKey || hasAnimaChatKey) {
       const { response, nonce } = nextResponseWithNonce(request)
       return addSecurityHeaders(response, request, nonce)
     }
