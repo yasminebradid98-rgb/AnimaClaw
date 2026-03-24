@@ -65,7 +65,7 @@ function QuickMessageRow({ msg }: { msg: QuickMessage }) {
 // ─── Widget ───────────────────────────────────────────────────────────────────
 
 export function QuickChatWidget({ data }: { data: DashboardData }) {
-  const { agents, setActiveConversation, addChatMessage, replacePendingMessage, updatePendingMessage } = useMissionControl()
+  const { agents, setActiveConversation, addChatMessage, updatePendingMessage } = useMissionControl()
   const navigateToPanel = useNavigateToPanel()
 
   const [messages, setMessages] = useState<QuickMessage[]>([])
@@ -90,7 +90,9 @@ export function QuickChatWidget({ data }: { data: DashboardData }) {
 
   const handleSend = useCallback(async (content: string, attachments?: ChatAttachment[]) => {
     if (!content.trim() && !attachments?.length) return
-    if (!selectedAgent) return
+
+    // Use selected agent or fall back to ANIMA root orchestrator
+    const targetAgent = selectedAgent || 'ROOT_ORCHESTRATOR'
 
     const tempId = --pendingIdRef.current
     const now = Math.floor(Date.now() / 1000)
@@ -108,14 +110,14 @@ export function QuickChatWidget({ data }: { data: DashboardData }) {
     setIsGenerating(true)
 
     try {
-      const convId = `agent_${selectedAgent}`
+      const convId = `agent_${targetAgent}`
 
       // Mirror to main store so it shows up if they switch to /chat
       addChatMessage({
         id: tempId,
         conversation_id: convId,
         from_agent: 'human',
-        to_agent: selectedAgent,
+        to_agent: targetAgent,
         content,
         message_type: 'text' as const,
         attachments,
@@ -123,17 +125,13 @@ export function QuickChatWidget({ data }: { data: DashboardData }) {
         pendingStatus: 'sending' as const,
       })
 
-      const res = await fetch('/api/chat/messages', {
+      // ── Route vers le moteur ANIMA (llm_client + mémoire tenant) ──────────
+      const res = await fetch('/api/anima-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'human',
-          to: selectedAgent,
-          content,
-          conversation_id: convId,
-          message_type: 'text',
-          attachments,
-          forward: true,
+          prompt: content,
+          agentId: targetAgent,
         }),
       })
 
@@ -143,35 +141,43 @@ export function QuickChatWidget({ data }: { data: DashboardData }) {
         setMessages((prev) =>
           prev.map((m) => (m.id === tempId ? { ...m, status: 'sent' } : m))
         )
-        if (body.message) {
-          replacePendingMessage(tempId, body.message)
-          // Add agent reply if available inline
-          if (body.reply?.content) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: Date.now(),
-                from: selectedAgent,
-                content: body.reply.content,
-                ts: Math.floor(Date.now() / 1000),
-              },
-            ])
-          }
+        // Add ANIMA reply
+        if (body.reply) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              from: body.agentId || targetAgent,
+              content: body.reply,
+              ts: Math.floor(Date.now() / 1000),
+            },
+          ])
         }
       } else {
+        const errBody = await res.json().catch(() => ({}))
         setMessages((prev) =>
           prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
         )
         updatePendingMessage(tempId, { pendingStatus: 'failed' })
+        // Show error as system message
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            from: 'ANIMA',
+            content: `Erreur : ${errBody.error || res.statusText}`,
+            ts: Math.floor(Date.now() / 1000),
+          },
+        ])
       }
-    } catch {
+    } catch (err) {
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
       )
     } finally {
       setIsGenerating(false)
     }
-  }, [selectedAgent, addChatMessage, replacePendingMessage, updatePendingMessage])
+  }, [selectedAgent, addChatMessage, updatePendingMessage])
 
   const openFullChat = () => {
     if (selectedAgent) setActiveConversation(`agent_${selectedAgent}`)
@@ -233,14 +239,10 @@ export function QuickChatWidget({ data }: { data: DashboardData }) {
             </div>
             <div className="text-center">
               <p className="text-xs font-medium text-foreground/70">
-                {hasAgents
-                  ? `Send a message to ${selectedAgent || 'an agent'}`
-                  : 'No agents online'}
+                {`Message ${selectedAgent || 'ANIMA'}`}
               </p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                {hasAgents
-                  ? 'Attach files or record a voice message'
-                  : 'Agents will appear here when connected'}
+                Alimenté par le moteur ANIMA OS
               </p>
             </div>
           </div>
@@ -252,7 +254,7 @@ export function QuickChatWidget({ data }: { data: DashboardData }) {
         {isGenerating && (
           <div className="flex gap-2 items-end">
             <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold bg-surface-2 text-muted-foreground border border-border/50">
-              {selectedAgent.charAt(0).toUpperCase()}
+              {(selectedAgent || 'A').charAt(0).toUpperCase()}
             </div>
             <div className="bg-surface-2 border border-border/40 rounded-2xl rounded-tl-sm px-3 py-2.5">
               <div className="flex gap-1 items-center">
@@ -269,7 +271,7 @@ export function QuickChatWidget({ data }: { data: DashboardData }) {
       <div className="border-t border-border/50 flex-shrink-0">
         <ChatInput
           onSend={handleSend}
-          disabled={!hasAgents || !selectedAgent}
+          disabled={false}
           agents={agents.map((a) => ({ name: a.name, role: a.role }))}
           isGenerating={isGenerating}
           compact

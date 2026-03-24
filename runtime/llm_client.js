@@ -22,6 +22,7 @@
 
 const https = require('https');
 const http = require('http');
+const memory = require('./memory_system'); // Ajoute cette ligne
 
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -428,11 +429,46 @@ async function resolveTenantKey(supabase, tenantId) {
  * @param {string|null} tenantId
  * @param {Object} params  - Same params as callLLM()
  */
+
+/**
+ * Enrichit le prompt avec les briques de savoir du client (Studio Argile, etc.)
+ */
+async function enrichPromptWithKnowledge(supabase, tenantId, systemPrompt) {
+  if (!supabase || !tenantId) return systemPrompt;
+
+  try {
+    // On appelle ta fonction qui récupère les mugs/prix
+    const knowledge = await memory.getClientKnowledge(supabase, tenantId);
+    
+    if (!knowledge) return systemPrompt;
+
+    // On fusionne les infos dans le prompt système
+    return `${systemPrompt}\n\n${knowledge}\n\nIMPORTANT: Utilise ces informations pour répondre de manière précise au client.`;
+  } catch (err) {
+    console.error('[LLMClient] Erreur injection mémoire:', err.message);
+    return systemPrompt;
+  }
+}
+
+/**
+ * Route an LLM call for a specific tenant with Memory Injection.
+ */
 async function callLLMForTenant(supabase, tenantId, params) {
+  // --- INJECTION MÉMOIRE YASMINE ---
+  // On récupère les briques de savoir (Mugs, prix, etc.) avant de lancer l'appel
+  if (supabase && tenantId) {
+    params.systemPrompt = await enrichPromptWithKnowledge(
+      supabase, 
+      tenantId, 
+      params.systemPrompt
+    );
+  }
+  // ---------------------------------
+
   const secret = await resolveTenantKey(supabase, tenantId);
 
   if (!secret) {
-    // No tenant-specific key — use system defaults
+    // Pas de clé spécifique au tenant — on utilise callLLM qui est déjà corrigé
     return callLLM(params);
   }
 
@@ -441,7 +477,7 @@ async function callLLMForTenant(supabase, tenantId, params) {
 
   switch (provider) {
     case 'openrouter':
-      return callOpenRouter({ ...params, apiKey, model });
+      return callOpenRouter({ ...params, apiKey, model, tenantId });
 
     case 'openai':
       return callOpenAICompatible({
@@ -462,8 +498,7 @@ async function callLLMForTenant(supabase, tenantId, params) {
 
     case 'anthropic':
     case 'gemini':
-      // Different API format — route via system OpenRouter with tenant's preferred model
-      return callOpenRouter({ ...params, model });
+      return callOpenRouter({ ...params, model, tenantId });
 
     case 'ollama':
       return callOpenClaw({ ...params, model });
