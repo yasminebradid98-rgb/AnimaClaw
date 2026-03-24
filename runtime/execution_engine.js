@@ -176,6 +176,10 @@ class ExecutionEngine {
         depth:         agent.depth         ?? 0,
         current_load:  agent.current_load  ?? 0,
         max_capacity:  agent.max_capacity  ?? 10,
+        // Force ALIVE if status would cause phi_core to skip this agent
+        status: (agent.status === 'PRUNED' || agent.status === 'QUARANTINED' || !agent.status)
+          ? 'ALIVE'
+          : agent.status,
       };
       const routingResult = phiCore.routeTask(
         {
