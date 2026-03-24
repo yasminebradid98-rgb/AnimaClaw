@@ -2,7 +2,7 @@ module.exports = {
   apps: [{
     name: 'AnimaOS',
     script: 'node',
-    args: '.next/standalone/server.js',
+    args: '.next/standalone/dashboard/server.js',
     cwd: __dirname,
     env_file: '.env',
     env: {
