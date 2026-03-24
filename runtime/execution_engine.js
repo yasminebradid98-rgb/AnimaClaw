@@ -168,10 +168,14 @@ class ExecutionEngine {
       }
 
       // 4. ROUTE TASK via phi_core
-      // Normalize agent: ensure phi_weight is always a number (fallback to golden ratio)
+      // Normalize agent: ensure required numeric fields have valid fallbacks
       const normalizedAgent = {
         ...agent,
-        phi_weight: agent.phi_weight || agent.personal_best || 1.618,
+        phi_weight:    agent.phi_weight    || agent.personal_best || 1.618,
+        vitality_score: agent.vitality_score ?? 0.9,
+        depth:         agent.depth         ?? 0,
+        current_load:  agent.current_load  ?? 0,
+        max_capacity:  agent.max_capacity  ?? 10,
       };
       const routingResult = phiCore.routeTask(
         {
