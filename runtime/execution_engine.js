@@ -124,7 +124,7 @@ class ExecutionEngine {
     const { data: task, error: claimError } = await this.supabase
       .rpc('claim_next_task');
 
-    if (claimError || !task) {
+    if (claimError || !task || !task.id) {
       return null; // No pending tasks
     }
 
@@ -168,6 +168,11 @@ class ExecutionEngine {
       }
 
       // 4. ROUTE TASK via phi_core
+      // Normalize agent: ensure phi_weight is always a number (fallback to golden ratio)
+      const normalizedAgent = {
+        ...agent,
+        phi_weight: agent.phi_weight || agent.personal_best || 1.618,
+      };
       const routingResult = phiCore.routeTask(
         {
           id: task.id,
@@ -175,7 +180,7 @@ class ExecutionEngine {
           urgency: task.payload.urgency || 0.5,
           mission_alignment: task.payload.alignment || 0.5,
         },
-        [agent]
+        [normalizedAgent]
       );
 
       if (!routingResult.agent) {
