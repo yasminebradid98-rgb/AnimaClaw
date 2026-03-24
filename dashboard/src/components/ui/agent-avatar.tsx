@@ -41,8 +41,9 @@ const sizeClasses: Record<NonNullable<AgentAvatarProps['size']>, string> = {
 }
 
 export function AgentAvatar({ name, size = 'sm', className = '' }: AgentAvatarProps) {
-  const initials = getInitials(name)
-  const colors = getAvatarColors(name)
+  const safeName = name || '?'
+  const initials = getInitials(safeName)
+  const colors = getAvatarColors(safeName)
 
   return (
     <div
