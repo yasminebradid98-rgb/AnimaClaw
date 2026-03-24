@@ -156,15 +156,24 @@ class ExecutionEngine {
         }
       }
 
-      // 3. Get agent from fractal state (only needed for direct LLM execution)
-      const { data: agent, error: agentError } = await this.supabase
+      // 3. Get agent from fractal state — fallback to ROOT_ORCHESTRATOR if not found
+      let { data: agent } = await this.supabase
         .from('anima_fractal_state')
         .select('*')
         .eq('branch_id', task.agent_id)
         .single();
 
-      if (agentError || !agent) {
-        throw new Error(`Agent ${task.agent_id} not found in fractal state`);
+      if (!agent) {
+        const { data: fallback } = await this.supabase
+          .from('anima_fractal_state')
+          .select('*')
+          .eq('branch_id', 'ROOT_ORCHESTRATOR')
+          .single();
+        agent = fallback;
+      }
+
+      if (!agent) {
+        throw new Error(`Agent ${task.agent_id} not found and ROOT_ORCHESTRATOR fallback missing`);
       }
 
       // 4. ROUTE TASK — agent already identified by task.agent_id, skip phi_core selection
