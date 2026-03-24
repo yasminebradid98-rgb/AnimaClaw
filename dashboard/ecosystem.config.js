@@ -1,15 +1,13 @@
 module.exports = {
   apps: [{
     name: 'AnimaOS',
-    // standalone mode: use node server.js directly (next start incompatible with output:standalone)
-    script: 'node',
-    args: '.next/standalone/server.js',
+    script: 'node_modules/.bin/next',
+    args: 'start --hostname 0.0.0.0',
     cwd: __dirname,
     env_file: '.env',
     env: {
       NODE_ENV: 'production',
       PORT: 3000,
-      HOSTNAME: '0.0.0.0',
     },
     instances: 1,
     exec_mode: 'fork',
