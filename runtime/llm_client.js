@@ -33,6 +33,18 @@ const DEFAULT_MODELS = {
   openrouter:  'anthropic/claude-3.5-sonnet',
   openclaw:    'openclaw-default',
   maxclaw:     'maxclaw-default',
+  // BYOLLM provider defaults (used when tenant brings their own key)
+  openai:      'gpt-4o',
+  groq:        'llama-3.1-70b-versatile',
+  anthropic:   'anthropic/claude-3.5-sonnet',  // routed via system OpenRouter
+  gemini:      'google/gemini-pro-1.5',         // routed via system OpenRouter
+  ollama:      'llama3.2',
+};
+
+// Direct provider endpoints (OpenAI-compatible format)
+const PROVIDER_ENDPOINTS = {
+  openai: { hostname: 'api.openai.com',  path: '/v1/chat/completions' },
+  groq:   { hostname: 'api.groq.com',    path: '/openai/v1/chat/completions' },
 };
 
 // Kimi (Moonshot AI) uses OpenAI-compatible API
@@ -235,6 +247,7 @@ async function callOpenRouter({
   temperature = 0.7,
   maxTokens = 4000,
   userId = 'anima-os',
+  tenantId = null,
 }) {
   const key = apiKey || process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error('OPENROUTER_API_KEY required for openrouter mode');
@@ -259,6 +272,7 @@ async function callOpenRouter({
       'HTTP-Referer': 'https://anima-os-dashboard.vercel.app',
       'X-Title': 'ANIMA OS',
       'X-User-ID': userId,
+      ...(tenantId && { 'X-Tenant-ID': String(tenantId) }),
     },
     body,
   });
@@ -330,6 +344,137 @@ async function callMaxClaw(params) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// BYOLLM: GENERIC OPENAI-COMPATIBLE CALL
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Generic OpenAI-compatible call for any provider that follows the
+ * /v1/chat/completions format (OpenAI, Groq, Kimi, etc.).
+ */
+async function callOpenAICompatible({
+  hostname,
+  path,
+  apiKey,
+  model,
+  systemPrompt,
+  userPrompt,
+  messages: customMessages,
+  tools = [],
+  temperature = 0.7,
+  maxTokens = 4000,
+}) {
+  if (!apiKey) throw new Error(`API key required for ${hostname}`);
+
+  const messages = customMessages || [];
+  if (!customMessages) {
+    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+    messages.push({ role: 'user', content: userPrompt });
+  }
+
+  const body = { model, messages, temperature, max_tokens: maxTokens };
+  if (tools.length > 0) { body.tools = tools; body.tool_choice = 'auto'; }
+
+  const response = await httpsPost({
+    hostname,
+    path,
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+    body,
+  });
+
+  return parseOpenAIResponse(response, model);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BYOLLM: TENANT KEY RESOLUTION + DISPATCH
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Look up the active LLM secret for a tenant from tenant_secrets table.
+ * Returns { provider, api_key, model_override } or null if not found.
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {string|null} tenantId
+ */
+async function resolveTenantKey(supabase, tenantId) {
+  if (!tenantId || !supabase) return null;
+
+  const { data, error } = await supabase
+    .from('tenant_secrets')
+    .select('provider, api_key, model_override')
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('[LLMClient] Could not resolve tenant key:', error.message);
+    return null;
+  }
+
+  return data; // { provider, api_key, model_override } or null
+}
+
+/**
+ * Route an LLM call for a specific tenant.
+ *
+ * Resolution order:
+ *   1. Query tenant_secrets for an active key → use tenant's own provider
+ *   2. No key found → fall back to system callLLM() (env vars)
+ *
+ * Supported tenant providers with direct calls: openai, groq, kimi
+ * Anthropic/Gemini: routed via system OpenRouter (different API format)
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {string|null} tenantId
+ * @param {Object} params  - Same params as callLLM()
+ */
+async function callLLMForTenant(supabase, tenantId, params) {
+  const secret = await resolveTenantKey(supabase, tenantId);
+
+  if (!secret) {
+    // No tenant-specific key — use system defaults
+    return callLLM(params);
+  }
+
+  const { provider, api_key: apiKey, model_override } = secret;
+  const model = params.model || model_override || DEFAULT_MODELS[provider] || DEFAULT_MODELS.openrouter;
+
+  switch (provider) {
+    case 'openrouter':
+      return callOpenRouter({ ...params, apiKey, model });
+
+    case 'openai':
+      return callOpenAICompatible({
+        ...params, apiKey, model,
+        hostname: PROVIDER_ENDPOINTS.openai.hostname,
+        path:     PROVIDER_ENDPOINTS.openai.path,
+      });
+
+    case 'groq':
+      return callOpenAICompatible({
+        ...params, apiKey, model,
+        hostname: PROVIDER_ENDPOINTS.groq.hostname,
+        path:     PROVIDER_ENDPOINTS.groq.path,
+      });
+
+    case 'kimi':
+      return callKimiClaw({ ...params, apiKey, model });
+
+    case 'anthropic':
+    case 'gemini':
+      // Different API format — route via system OpenRouter with tenant's preferred model
+      return callOpenRouter({ ...params, model });
+
+    case 'ollama':
+      return callOpenClaw({ ...params, model });
+
+    default:
+      console.warn(`[LLMClient] Unknown provider '${provider}' for tenant ${tenantId}, using system defaults`);
+      return callLLM(params);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // AUTO-DETECT MODE
 // ═══════════════════════════════════════════════════════════════════
 
@@ -376,7 +521,7 @@ async function callLLM(params) {
       return callKimiClaw(params);
 
     case 'openrouter':
-      return callOpenRouter(params);
+      return callOpenRouter({ ...params, tenantId: params.tenantId || null });
 
     case 'openclaw':
       return callOpenClaw(params);
@@ -402,6 +547,8 @@ function getAvailableModels(mode = 'kimi-claw') {
 
 module.exports = {
   callLLM,
+  callLLMForTenant,
+  resolveTenantKey,
   callKimiClaw,
   callOpenRouter,
   callOpenClaw,
