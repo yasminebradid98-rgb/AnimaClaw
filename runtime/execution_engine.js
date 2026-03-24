@@ -167,33 +167,9 @@ class ExecutionEngine {
         throw new Error(`Agent ${task.agent_id} not found in fractal state`);
       }
 
-      // 4. ROUTE TASK via phi_core
-      // Normalize agent: ensure required numeric fields have valid fallbacks
-      const normalizedAgent = {
-        ...agent,
-        phi_weight:    agent.phi_weight    || agent.personal_best || 1.618,
-        vitality_score: agent.vitality_score ?? 0.9,
-        depth:         agent.depth         ?? 0,
-        current_load:  agent.current_load  ?? 0,
-        max_capacity:  agent.max_capacity  ?? 10,
-        // Force ALIVE if status would cause phi_core to skip this agent
-        status: (agent.status === 'PRUNED' || agent.status === 'QUARANTINED' || !agent.status)
-          ? 'ALIVE'
-          : agent.status,
-      };
-      const routingResult = phiCore.routeTask(
-        {
-          id: task.id,
-          complexity,
-          urgency: task.payload.urgency || 0.5,
-          mission_alignment: task.payload.alignment || 0.5,
-        },
-        [normalizedAgent]
-      );
-
-      if (!routingResult.agent) {
-        throw new Error('No suitable agent found for task');
-      }
+      // 4. ROUTE TASK — agent already identified by task.agent_id, skip phi_core selection
+      // phi_core is for multi-agent scoring; single explicit agent needs no routing
+      const routingResult = { agent: agent.branch_id || agent.name || task.agent_id };
 
       // 4. CALL LLM
       const systemPrompt = this.getSystemPromptForTask(task);
