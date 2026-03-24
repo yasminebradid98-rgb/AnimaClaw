@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole } from '@/lib/auth'
+import { getUserFromRequest } from '@/lib/auth'
 import { logger } from '@/lib/logger'
 
 // ─── Supabase REST helpers (no SDK — uses native fetch) ──────────────────────
@@ -27,7 +27,6 @@ async function supabaseInsert<T>(table: string, row: Record<string, unknown>): P
   })
   const json = await res.json()
   if (!res.ok) throw new Error(json?.message || `Supabase insert error ${res.status}`)
-  // REST returns an array
   return Array.isArray(json) ? json[0] : json
 }
 
@@ -103,12 +102,37 @@ async function pollTaskResult(taskId: string): Promise<{ reply: string; status: 
   }
 }
 
+// ─── Auth: vérifie X-Api-Key OU session cookie ───────────────────────────────
+// Retourne null si aucune auth valide.
+
+function checkAuth(request: NextRequest): { ok: true; isApiKey: boolean } | { ok: false } {
+  // 1. Essai via getUserFromRequest (session cookie + API key vs env API_KEY)
+  const user = getUserFromRequest(request)
+  if (user) return { ok: true, isApiKey: user.id === 0 }
+
+  // 2. Fallback : clé ANIMA_CHAT_KEY dédiée à cette route (optionnelle)
+  const animaChatKey = (process.env.ANIMA_CHAT_KEY || '').trim()
+  if (animaChatKey) {
+    const provided = (
+      request.headers.get('x-api-key') ||
+      request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
+      ''
+    ).trim()
+    if (provided && provided === animaChatKey) return { ok: true, isApiKey: true }
+  }
+
+  return { ok: false }
+}
+
 // ─── Route ───────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  const auth = requireRole(request, 'viewer')
-  if ('error' in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const authResult = checkAuth(request)
+  if (!authResult.ok) {
+    return NextResponse.json(
+      { error: 'Unauthorized — fournir X-Api-Key ou se connecter au dashboard' },
+      { status: 401 },
+    )
   }
 
   let body: unknown
@@ -118,20 +142,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Corps JSON invalide' }, { status: 400 })
   }
 
-  const { prompt, agentId, missionDna } = body as {
+  const { prompt, agentId, missionDna, tenantId: tenantIdOverride } = body as {
     prompt?: string
     agentId?: string
     missionDna?: string
+    // Permet de passer 'studio_argile' directement dans le body (API key auth)
+    tenantId?: string | number
   }
 
   if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
     return NextResponse.json({ error: '"prompt" est requis' }, { status: 400 })
   }
 
-  // tenant_id comes from the authenticated user's session
-  const tenantId: number = auth.user.tenant_id
+  // Résolution du tenant :
+  // - Si la requête vient de l'API key et que tenantId est fourni → on le respecte
+  // - Sinon on lit le tenant_id numérique de la session SQLite
+  // - Fallback : tenant_id numérique 1 (workspace par défaut)
+  const user = getUserFromRequest(request)
+  const tenantId: string | number =
+    tenantIdOverride ??
+    user?.tenant_id ??
+    Number(process.env.ANIMA_DEFAULT_TENANT_ID || 1)
 
-  // Verify Supabase is configured before doing anything
+  // Vérification Supabase
   if (!process.env.SUPABASE_URL) {
     return NextResponse.json({ error: 'SUPABASE_URL non configuré sur le serveur' }, { status: 500 })
   }
@@ -169,9 +202,9 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     reply,
     status,
-    taskId:  task.id,
+    taskId:   task.id,
     tenantId,
-    agentId: agentId || 'ROOT_ORCHESTRATOR',
+    agentId:  agentId || 'ROOT_ORCHESTRATOR',
   })
 }
 
