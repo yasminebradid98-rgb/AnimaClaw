@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
   try {
     task = await supabaseInsert<{ id: string }>('anima_task_queue', {
       agent_id:  agentId || 'ROOT_ORCHESTRATOR',
-      task_type: 'chat',
+      task_type: 'generation',
       priority:  7,
       tenant_id: tenantId,
       payload: {
