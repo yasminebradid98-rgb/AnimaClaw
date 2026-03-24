@@ -1,14 +1,15 @@
 module.exports = {
   apps: [{
     name: 'AnimaOS',
-    // Utilise next directement — bypass pnpm + verify:node
-    script: 'node_modules/.bin/next',
-    args: 'start --hostname 0.0.0.0',
+    // standalone mode: use node server.js directly (next start incompatible with output:standalone)
+    script: 'node',
+    args: '.next/standalone/server.js',
     cwd: __dirname,
     env_file: '.env',
     env: {
       NODE_ENV: 'production',
-      PORT: 3000,        // Dashboard UI — 18789 est réservé au gateway OpenClaw
+      PORT: 3000,
+      HOSTNAME: '0.0.0.0',
     },
     instances: 1,
     exec_mode: 'fork',
