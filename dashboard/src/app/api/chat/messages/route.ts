@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger'
 import { scanForInjection, sanitizeForPrompt } from '@/lib/injection-guard'
 import { callOpenClawGateway } from '@/lib/openclaw-gateway'
 import { resolveCoordinatorDeliveryTarget } from '@/lib/coordinator-routing'
+import { callNexus, isNexusTarget } from '@/lib/nexus-client'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -657,6 +658,66 @@ export async function POST(request: NextRequest) {
         messageId,
         workspaceId
       )
+
+      // ── NEXUS routing ────────────────────────────────────────────────
+      // Si l'agent cible est NEXUS, on bypass le gateway et on appelle
+      // l'orchestrateur directement (boucle agentique complète).
+      if (body.forward && isNexusTarget(to)) {
+        forwardInfo = { attempted: true, delivered: false }
+        try {
+          // Charger l'historique récent de la conversation pour le contexte
+          const recentMessages = db
+            .prepare(`
+              SELECT from_agent, content FROM messages
+              WHERE conversation_id = ? AND workspace_id = ? AND message_type = 'text'
+              ORDER BY created_at DESC LIMIT 20
+            `)
+            .all(conversation_id, workspaceId) as Array<{ from_agent: string; content: string }>
+
+          const history = recentMessages
+            .reverse()
+            .map((m) => ({
+              role: m.from_agent === 'human' ? 'user' : 'assistant',
+              content: m.content,
+            }))
+
+          const nexusResult = await callNexus(content, {
+            tenantId: body.tenantId || null,
+            sessionId: conversation_id,
+            history,
+          })
+          const replyContent = nexusResult.content || 'Pas de réponse.'
+          const replyMeta = {
+            source: 'nexus',
+            model: nexusResult.model,
+            complexity: nexusResult.complexity,
+            toolsUsed: nexusResult.toolsUsed,
+            iterations: nexusResult.iterations,
+            durationMs: nexusResult.durationMs,
+            usage: nexusResult.usage,
+          }
+          createChatReply(db, workspaceId, conversation_id, to!, from, replyContent, 'text', replyMeta)
+          forwardInfo.delivered = true
+          forwardInfo.reason = nexusResult.warning
+        } catch (err: any) {
+          logger.error({ err }, 'NEXUS call failed')
+          createChatReply(
+            db, workspaceId, conversation_id, to!, from,
+            `Erreur NEXUS : ${err.message}`,
+            'status', { status: 'error', source: 'nexus' }
+          )
+        }
+
+        // On retourne directement — pas besoin du flow gateway
+        const savedMsg = db
+          .prepare('SELECT * FROM messages WHERE id = ? AND workspace_id = ?')
+          .get(messageId, workspaceId) as Message
+
+        return NextResponse.json({
+          message: { ...savedMsg, metadata: safeParseMetadata((savedMsg as any).metadata) },
+          forward: forwardInfo,
+        })
+      }
 
       // Optionally forward to agent via gateway
       if (body.forward) {
